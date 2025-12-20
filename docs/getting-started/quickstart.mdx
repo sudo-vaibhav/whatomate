@@ -1,0 +1,102 @@
+---
+title: Quickstart
+description: "Get Whatomate up and running in minutes"
+---
+
+## Prerequisites
+
+Before you begin, ensure you have the following installed:
+
+- Go 1.21+
+- Node.js 18+
+- PostgreSQL 14+
+- Redis 6+
+- Docker & Docker Compose (optional)
+
+## Option 1: Docker Setup (Recommended)
+
+The fastest way to get started is using Docker Compose:
+
+```bash
+cd docker
+docker compose up -d
+```
+
+Access the application at `http://localhost:3000`
+
+## Option 2: Manual Setup
+
+### 1. Clone and Configure
+
+```bash
+cd whatomate
+cp config.example.toml config.toml
+# Edit config.toml with your settings
+```
+
+### 2. Start the Backend
+
+```bash
+# Install dependencies
+go mod download
+
+# Run database migrations
+make migrate
+
+# Start the server
+make run
+```
+
+### 3. Start the Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The frontend will be available at `http://localhost:5173` and the API at `http://localhost:8080`.
+
+## WhatsApp Setup
+
+To connect with WhatsApp, you'll need to:
+
+<Steps>
+  <Step title="Create Meta Developer Account">
+    Visit [developers.facebook.com](https://developers.facebook.com) and create an account.
+  </Step>
+  <Step title="Create App">
+    Create a new app and add the WhatsApp product.
+  </Step>
+  <Step title="Get Credentials">
+    Get your Phone Number ID and Business Account ID from the WhatsApp settings.
+  </Step>
+  <Step title="Generate Access Token">
+    Generate a permanent access token for API access.
+  </Step>
+  <Step title="Configure Webhook">
+    Configure the webhook URL to point to `/api/webhook` on your server.
+  </Step>
+  <Step title="Set Verify Token">
+    Set the webhook verify token in your `config.toml` file.
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Configuration"
+    icon="gear"
+    href="/getting-started/configuration"
+  >
+    Learn about all configuration options
+  </Card>
+  <Card
+    title="Features"
+    icon="star"
+    href="/features/dashboard"
+  >
+    Explore Whatomate features
+  </Card>
+</CardGroup>

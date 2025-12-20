@@ -1,0 +1,80 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Whatomate",
+  "logo": {
+    "dark": "/images/logo-dark.svg",
+    "light": "/images/logo-light.svg"
+  },
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#25D366",
+    "light": "#128C7E",
+    "dark": "#075E54",
+    "anchors": {
+      "from": "#25D366",
+      "to": "#128C7E"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "GitHub",
+      "url": "https://github.com/shridarpatil/whatomate"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Get Started",
+    "url": "/getting-started/quickstart"
+  },
+  "tabs": [
+    {
+      "name": "API Reference",
+      "url": "api-reference"
+    }
+  ],
+  "anchors": [
+    {
+      "name": "GitHub",
+      "icon": "github",
+      "url": "https://github.com/shridarpatil/whatomate"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Getting Started",
+      "pages": [
+        "introduction",
+        "getting-started/quickstart",
+        "getting-started/configuration"
+      ]
+    },
+    {
+      "group": "Features",
+      "pages": [
+        "features/dashboard",
+        "features/chatbot",
+        "features/templates",
+        "features/campaigns",
+        "features/whatsapp-flows"
+      ]
+    },
+    {
+      "group": "API Reference",
+      "pages": [
+        "api-reference/overview",
+        "api-reference/authentication",
+        "api-reference/accounts",
+        "api-reference/contacts",
+        "api-reference/messages",
+        "api-reference/templates",
+        "api-reference/flows",
+        "api-reference/campaigns",
+        "api-reference/chatbot",
+        "api-reference/webhooks",
+        "api-reference/analytics"
+      ]
+    }
+  ],
+  "footerSocials": {
+    "github": "https://github.com/shridarpatil/whatomate"
+  }
+}

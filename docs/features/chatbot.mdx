@@ -1,0 +1,136 @@
+---
+title: Chatbot Automation
+description: "Automate customer conversations with intelligent chatbots"
+---
+
+<Frame>
+  <img
+    src="/images/02-chatbot-settings.png"
+    alt="Chatbot Settings"
+  />
+</Frame>
+
+## Overview
+
+Whatomate's chatbot automation allows you to create intelligent, automated responses for your WhatsApp messages. From simple keyword-based replies to complex AI-powered conversations, you have full control over how your business responds to customers.
+
+## Keyword Rules
+
+<Frame>
+  <img
+    src="/images/03-keyword-rules.png"
+    alt="Keyword Rules"
+  />
+</Frame>
+
+Create automated responses triggered by specific keywords or phrases.
+
+### Creating a Keyword Rule
+
+<Frame>
+  <img
+    src="/images/04-keyword-rule-editor.png"
+    alt="Keyword Rule Editor"
+  />
+</Frame>
+
+<Steps>
+  <Step title="Define Keywords">
+    Add one or more keywords or phrases that will trigger the rule.
+  </Step>
+  <Step title="Set Match Type">
+    Choose how keywords should be matched:
+    - **Exact** - Message must match exactly
+    - **Contains** - Message contains the keyword
+    - **Starts with** - Message begins with the keyword
+    - **Regex** - Use regular expressions for complex patterns
+  </Step>
+  <Step title="Configure Response">
+    Set the response type and content:
+    - Text message
+    - Template message
+    - Media (image, video, document)
+    - Trigger a conversation flow
+  </Step>
+  <Step title="Set Priority">
+    Assign priority to determine which rule applies when multiple rules match.
+  </Step>
+</Steps>
+
+## AI Contexts
+
+<Frame>
+  <img
+    src="/images/05-ai-contexts.png"
+    alt="AI Contexts"
+  />
+</Frame>
+
+Enhance your chatbot with AI-powered responses using contexts that provide relevant information to the AI.
+
+### Creating an AI Context
+
+<Frame>
+  <img
+    src="/images/06-ai-context-editor.png"
+    alt="AI Context Editor"
+  />
+</Frame>
+
+AI Contexts allow you to:
+- Define static knowledge bases
+- Connect to external APIs for dynamic data
+- Set trigger keywords for context activation
+- Configure priority for multiple contexts
+
+### Supported AI Providers
+
+<CardGroup cols={3}>
+  <Card title="OpenAI" icon="robot">
+    GPT-4o, GPT-4o-mini, GPT-4-turbo
+  </Card>
+  <Card title="Anthropic" icon="brain">
+    Claude 3.5 Sonnet, Claude 3.5 Haiku
+  </Card>
+  <Card title="Google AI" icon="google">
+    Gemini 2.0 Flash, Gemini 1.5 Flash
+  </Card>
+</CardGroup>
+
+## Conversation Flows
+
+<Frame>
+  <img
+    src="/images/07-conversation-flows.png"
+    alt="Conversation Flows"
+  />
+</Frame>
+
+Design multi-step conversation flows with branching logic to guide customers through complex interactions.
+
+### Flow Builder
+
+<Frame>
+  <img
+    src="/images/08-conversation-flow-builder.png"
+    alt="Conversation Flow Builder"
+  />
+</Frame>
+
+The visual flow builder allows you to:
+- Create multiple conversation steps
+- Define user input types (text, buttons, lists)
+- Store responses in variables
+- Add conditional branching
+- Configure completion actions
+
+### Flow Features
+
+| Feature | Description |
+|---------|-------------|
+| **Input Validation** | Validate user responses with regex patterns |
+| **Variable Storage** | Store user inputs for later use in the conversation |
+| **Conditional Logic** | Branch based on user responses |
+| **API Integration** | Fetch data from external APIs during the flow |
+| **Agent Transfer** | Transfer to human agent when needed |
+| **WhatsApp Flows** | Integrate native WhatsApp Flows |

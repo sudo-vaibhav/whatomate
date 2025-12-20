@@ -1,0 +1,120 @@
+---
+title: Configuration
+description: "Configure Whatomate for your environment"
+---
+
+## Configuration File
+
+Whatomate uses a TOML configuration file. Copy `config.example.toml` to `config.toml` and update the values:
+
+```toml
+[app]
+name = "Whatomate"
+environment = "development"
+debug = true
+
+[server]
+host = "0.0.0.0"
+port = 8080
+
+[database]
+host = "localhost"
+port = 5432
+user = "whatomate"
+password = "your-password"
+name = "whatomate"
+ssl_mode = "disable"
+
+[redis]
+host = "localhost"
+port = 6379
+password = ""
+db = 0
+
+[jwt]
+secret = "your-jwt-secret"
+access_token_expiry = "15m"
+refresh_token_expiry = "7d"
+
+[whatsapp]
+api_version = "v18.0"
+webhook_verify_token = "your-webhook-verify-token"
+
+[ai]
+openai_api_key = ""
+anthropic_api_key = ""
+google_api_key = ""
+```
+
+## Configuration Sections
+
+### App Settings
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `name` | Application name | Whatomate |
+| `environment` | Environment (development/production) | development |
+| `debug` | Enable debug mode | true |
+
+### Server Settings
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `host` | Server bind address | 0.0.0.0 |
+| `port` | Server port | 8080 |
+
+### Database Settings
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `host` | PostgreSQL host | localhost |
+| `port` | PostgreSQL port | 5432 |
+| `user` | Database username | whatomate |
+| `password` | Database password | - |
+| `name` | Database name | whatomate |
+| `ssl_mode` | SSL mode | disable |
+
+### Redis Settings
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `host` | Redis host | localhost |
+| `port` | Redis port | 6379 |
+| `password` | Redis password | - |
+| `db` | Redis database number | 0 |
+
+### JWT Settings
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `secret` | JWT signing secret | - |
+| `access_token_expiry` | Access token lifetime | 15m |
+| `refresh_token_expiry` | Refresh token lifetime | 7d |
+
+### WhatsApp Settings
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `api_version` | Meta API version | v18.0 |
+| `webhook_verify_token` | Webhook verification token | - |
+
+### AI Settings
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `openai_api_key` | OpenAI API key | - |
+| `anthropic_api_key` | Anthropic API key | - |
+| `google_api_key` | Google AI API key | - |
+
+<Note>
+  AI API keys are optional. Configure only the providers you want to use for AI-powered chatbot responses.
+</Note>
+
+## Environment Variables
+
+You can also use environment variables to override configuration values. Environment variables take precedence over the config file.
+
+```bash
+export WHATOMATE_DATABASE_PASSWORD="your-password"
+export WHATOMATE_JWT_SECRET="your-secret"
+```

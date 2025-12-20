@@ -1,0 +1,204 @@
+---
+title: Contacts
+description: "Manage contacts and contact information"
+---
+
+## Overview
+
+Contacts represent WhatsApp users you communicate with. Each contact stores their phone number, profile information, and conversation history.
+
+## List Contacts
+
+Retrieve a paginated list of contacts.
+
+```bash
+GET /api/contacts
+```
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `page` | integer | Page number (default: 1) |
+| `limit` | integer | Items per page (default: 20, max: 100) |
+| `search` | string | Search by name or phone number |
+| `account_id` | string | Filter by WhatsApp account |
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "items": [
+      {
+        "id": "uuid",
+        "phone_number": "+1234567890",
+        "name": "John Doe",
+        "profile_name": "John",
+        "avatar_url": "https://...",
+        "account_id": "uuid",
+        "assigned_to": "uuid",
+        "last_message_at": "2024-01-01T12:00:00Z",
+        "created_at": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "total": 100,
+    "page": 1,
+    "limit": 20,
+    "total_pages": 5
+  }
+}
+```
+
+## Get Contact
+
+Retrieve a single contact by ID.
+
+```bash
+GET /api/contacts/{id}
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "phone_number": "+1234567890",
+    "name": "John Doe",
+    "profile_name": "John",
+    "avatar_url": "https://...",
+    "account_id": "uuid",
+    "assigned_to": "uuid",
+    "metadata": {
+      "custom_field": "value"
+    },
+    "last_message_at": "2024-01-01T12:00:00Z",
+    "created_at": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+## Create Contact
+
+Create a new contact.
+
+```bash
+POST /api/contacts
+```
+
+### Request Body
+
+```json
+{
+  "phone_number": "+1234567890",
+  "name": "John Doe",
+  "account_id": "uuid",
+  "metadata": {
+    "custom_field": "value"
+  }
+}
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "phone_number": "+1234567890",
+    "name": "John Doe",
+    "account_id": "uuid",
+    "created_at": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+## Update Contact
+
+Update an existing contact.
+
+```bash
+PUT /api/contacts/{id}
+```
+
+### Request Body
+
+```json
+{
+  "name": "John Smith",
+  "metadata": {
+    "custom_field": "updated_value"
+  }
+}
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "phone_number": "+1234567890",
+    "name": "John Smith",
+    "metadata": {
+      "custom_field": "updated_value"
+    },
+    "updated_at": "2024-01-01T12:00:00Z"
+  }
+}
+```
+
+## Delete Contact
+
+Delete a contact and all associated data.
+
+```bash
+DELETE /api/contacts/{id}
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": null
+}
+```
+
+## Assign Contact
+
+Assign a contact to a team member.
+
+```bash
+PUT /api/contacts/{id}/assign
+```
+
+### Request Body
+
+```json
+{
+  "user_id": "uuid"
+}
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "assigned_to": "uuid",
+    "updated_at": "2024-01-01T12:00:00Z"
+  }
+}
+```
+
+<Tip>
+  Use the `metadata` field to store custom data like customer IDs, order numbers, or any business-specific information.
+</Tip>

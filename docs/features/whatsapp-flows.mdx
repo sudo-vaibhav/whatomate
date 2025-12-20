@@ -1,0 +1,122 @@
+---
+title: WhatsApp Flows
+description: "Build native WhatsApp interactive experiences"
+---
+
+<Frame>
+  <img
+    src="/images/09-whatsapp-flows.png"
+    alt="WhatsApp Flows"
+  />
+</Frame>
+
+## Overview
+
+WhatsApp Flows enable businesses to create rich, interactive experiences directly within WhatsApp. Unlike regular messages, Flows provide native UI components like forms, dropdown menus, and multi-screen journeys.
+
+## Flow Builder
+
+<Frame>
+  <img
+    src="/images/10-whatsapp-flow-builder.png"
+    alt="WhatsApp Flow Builder"
+  />
+</Frame>
+
+Whatomate provides a visual Flow Builder to design and manage your WhatsApp Flows:
+
+### Features
+
+- **Visual Editor** - Design flows with a drag-and-drop interface
+- **Screen Builder** - Create multi-screen experiences
+- **Component Library** - Use native WhatsApp UI components
+- **Preview** - Test your flow before publishing
+- **Sync with Meta** - Push and pull flows from Meta
+
+## Flow Components
+
+WhatsApp Flows support various UI components:
+
+<CardGroup cols={2}>
+  <Card title="Text Input" icon="keyboard">
+    Single-line and multi-line text fields
+  </Card>
+  <Card title="Dropdown" icon="chevron-down">
+    Selection menus with multiple options
+  </Card>
+  <Card title="Date Picker" icon="calendar">
+    Native date selection component
+  </Card>
+  <Card title="Radio Buttons" icon="circle-dot">
+    Single-select option groups
+  </Card>
+  <Card title="Checkboxes" icon="square-check">
+    Multi-select options
+  </Card>
+  <Card title="Buttons" icon="hand-pointer">
+    Action buttons for navigation
+  </Card>
+</CardGroup>
+
+## Flow Lifecycle
+
+<Steps>
+  <Step title="Create">
+    Design your flow using the visual builder or JSON editor.
+  </Step>
+  <Step title="Save to Meta">
+    Push your flow to Meta's WhatsApp Business API.
+  </Step>
+  <Step title="Test">
+    Test the flow in draft mode before publishing.
+  </Step>
+  <Step title="Publish">
+    Make the flow available for use in messages.
+  </Step>
+</Steps>
+
+## Flow Status
+
+| Status | Description |
+|--------|-------------|
+| **Draft** | Flow is being designed, not yet available |
+| **Published** | Flow is live and can be sent to users |
+| **Deprecated** | Flow has been retired |
+
+## Using Flows
+
+### In Chatbot
+
+Integrate WhatsApp Flows into your chatbot conversation flows:
+
+1. Create a flow step with type "WhatsApp Flow"
+2. Select the published flow
+3. Configure the trigger message
+4. Handle flow completion responses
+
+### Via API
+
+Send flows programmatically using the REST API:
+
+```bash
+POST /api/messages
+{
+  "contact_id": "...",
+  "type": "flow",
+  "flow_id": "...",
+  "flow_token": "...",
+  "header": "Complete Your Order",
+  "body": "Please fill in the details below",
+  "button_text": "Start"
+}
+```
+
+## Best Practices
+
+<Tip>
+  Keep flows concise - users prefer shorter, focused experiences over lengthy multi-screen journeys.
+</Tip>
+
+<Note>
+  WhatsApp Flows require a business verification and may not be available in all regions.
+</Note>

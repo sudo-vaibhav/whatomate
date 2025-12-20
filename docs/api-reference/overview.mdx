@@ -1,0 +1,123 @@
+---
+title: API Overview
+description: "Introduction to the Whatomate REST API"
+---
+
+## Base URL
+
+All API requests should be made to:
+
+```
+http://your-server:8080/api
+```
+
+## Authentication
+
+The Whatomate API uses JWT (JSON Web Tokens) for authentication. Include the access token in the Authorization header:
+
+```bash
+Authorization: Bearer <access_token>
+```
+
+See [Authentication](/api-reference/authentication) for details on obtaining tokens.
+
+## Response Format
+
+All responses are returned in JSON format with the following structure:
+
+### Success Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    // Response data
+  }
+}
+```
+
+### Error Response
+
+```json
+{
+  "status": "error",
+  "message": "Error description",
+  "data": null
+}
+```
+
+## HTTP Status Codes
+
+| Code | Description |
+|------|-------------|
+| 200 | Success |
+| 201 | Created |
+| 400 | Bad Request - Invalid parameters |
+| 401 | Unauthorized - Invalid or missing token |
+| 403 | Forbidden - Insufficient permissions |
+| 404 | Not Found |
+| 500 | Internal Server Error |
+
+## Rate Limiting
+
+API requests are subject to rate limiting to ensure fair usage:
+
+- **Standard**: 100 requests per minute
+- **Bulk operations**: 10 requests per minute
+
+Rate limit headers are included in responses:
+
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1640000000
+```
+
+## Pagination
+
+List endpoints support pagination using `page` and `limit` query parameters:
+
+```bash
+GET /api/contacts?page=1&limit=20
+```
+
+Paginated responses include:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "items": [...],
+    "total": 100,
+    "page": 1,
+    "limit": 20,
+    "total_pages": 5
+  }
+}
+```
+
+## API Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/api-reference/authentication">
+    Register, login, and manage tokens
+  </Card>
+  <Card title="Contacts" icon="address-book" href="/api-reference/contacts">
+    Manage contacts and contact lists
+  </Card>
+  <Card title="Messages" icon="message" href="/api-reference/messages">
+    Send and receive messages
+  </Card>
+  <Card title="Templates" icon="file-lines" href="/api-reference/templates">
+    Manage message templates
+  </Card>
+  <Card title="Flows" icon="diagram-project" href="/api-reference/flows">
+    WhatsApp Flows management
+  </Card>
+  <Card title="Chatbot" icon="robot" href="/api-reference/chatbot">
+    Chatbot configuration
+  </Card>
+  <Card title="Webhooks" icon="webhook" href="/api-reference/webhooks">
+    Receive real-time updates
+  </Card>
+</CardGroup>

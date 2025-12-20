@@ -1,0 +1,243 @@
+---
+title: Messages
+description: "Send and receive WhatsApp messages"
+---
+
+## Overview
+
+The Messages API allows you to send various types of WhatsApp messages including text, media, templates, and interactive messages.
+
+## Get Messages
+
+Retrieve messages for a specific contact.
+
+```bash
+GET /api/contacts/{id}/messages
+```
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `page` | integer | Page number (default: 1) |
+| `limit` | integer | Items per page (default: 50, max: 100) |
+| `before` | string | Get messages before this message ID |
+| `after` | string | Get messages after this message ID |
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "items": [
+      {
+        "id": "uuid",
+        "wa_message_id": "wamid.xxx",
+        "contact_id": "uuid",
+        "direction": "incoming",
+        "type": "text",
+        "content": {
+          "text": "Hello!"
+        },
+        "status": "delivered",
+        "timestamp": "2024-01-01T12:00:00Z"
+      }
+    ],
+    "total": 100,
+    "page": 1,
+    "limit": 50
+  }
+}
+```
+
+## Send Text Message
+
+Send a text message to a contact.
+
+```bash
+POST /api/contacts/{id}/messages
+```
+
+### Request Body
+
+```json
+{
+  "type": "text",
+  "text": "Hello! How can I help you today?"
+}
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "wa_message_id": "wamid.xxx",
+    "status": "sent",
+    "timestamp": "2024-01-01T12:00:00Z"
+  }
+}
+```
+
+## Send Template Message
+
+Send a pre-approved template message.
+
+```bash
+POST /api/messages/template
+```
+
+### Request Body
+
+```json
+{
+  "contact_id": "uuid",
+  "template_name": "order_confirmation",
+  "language": "en",
+  "components": [
+    {
+      "type": "header",
+      "parameters": [
+        {
+          "type": "image",
+          "image": {
+            "link": "https://example.com/image.jpg"
+          }
+        }
+      ]
+    },
+    {
+      "type": "body",
+      "parameters": [
+        {
+          "type": "text",
+          "text": "John"
+        },
+        {
+          "type": "text",
+          "text": "12345"
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "wa_message_id": "wamid.xxx",
+    "status": "sent"
+  }
+}
+```
+
+## Send Media Message
+
+Send an image, video, document, or audio message.
+
+```bash
+POST /api/messages/media
+```
+
+### Request Body
+
+```json
+{
+  "contact_id": "uuid",
+  "type": "image",
+  "media_url": "https://example.com/image.jpg",
+  "caption": "Check out this product!"
+}
+```
+
+### Supported Media Types
+
+| Type | Formats | Max Size |
+|------|---------|----------|
+| `image` | JPEG, PNG | 5 MB |
+| `video` | MP4, 3GPP | 16 MB |
+| `audio` | AAC, MP3, OGG | 16 MB |
+| `document` | PDF, DOC, XLS, PPT | 100 MB |
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "wa_message_id": "wamid.xxx",
+    "status": "sent"
+  }
+}
+```
+
+## Mark Message as Read
+
+Mark a message as read.
+
+```bash
+PUT /api/messages/{id}/read
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": null
+}
+```
+
+## Message Status
+
+Messages go through the following status flow:
+
+| Status | Description |
+|--------|-------------|
+| `pending` | Message queued for sending |
+| `sent` | Message sent to WhatsApp servers |
+| `delivered` | Message delivered to recipient's device |
+| `read` | Message read by recipient |
+| `failed` | Message failed to send |
+
+<Note>
+  Status updates are delivered via webhooks in real-time. Configure your webhook endpoint to receive these updates.
+</Note>
+
+## Message Types
+
+<CardGroup cols={2}>
+  <Card title="Text" icon="font">
+    Plain text messages
+  </Card>
+  <Card title="Image" icon="image">
+    JPEG, PNG images with optional caption
+  </Card>
+  <Card title="Video" icon="video">
+    MP4 videos with optional caption
+  </Card>
+  <Card title="Document" icon="file">
+    PDF, Word, Excel, and other documents
+  </Card>
+  <Card title="Audio" icon="volume-high">
+    Voice messages and audio files
+  </Card>
+  <Card title="Template" icon="file-lines">
+    Pre-approved message templates
+  </Card>
+  <Card title="Interactive" icon="hand-pointer">
+    Buttons, lists, and reply buttons
+  </Card>
+  <Card title="Flow" icon="diagram-project">
+    WhatsApp Flows
+  </Card>
+</CardGroup>

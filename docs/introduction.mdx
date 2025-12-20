@@ -1,0 +1,91 @@
+---
+title: Introduction
+description: "Welcome to Whatomate - A modern WhatsApp Business Platform"
+---
+
+<Frame>
+  <img
+    src="/images/01-dashboard.png"
+    alt="Whatomate Dashboard"
+  />
+</Frame>
+
+## What is Whatomate?
+
+Whatomate is a modern WhatsApp Business Platform built with Go (Fastglue) and Vue.js (shadcn-vue). It provides a comprehensive solution for businesses to manage their WhatsApp communications, automate responses, and engage with customers at scale.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card
+    title="Multi-tenant Architecture"
+    icon="building"
+  >
+    Support multiple organizations with isolated data and configurations.
+  </Card>
+  <Card
+    title="WhatsApp Cloud API"
+    icon="whatsapp"
+  >
+    Seamless integration with Meta's WhatsApp Business API.
+  </Card>
+  <Card
+    title="Real-time Chat"
+    icon="messages"
+  >
+    Live messaging with WebSocket support for instant communication.
+  </Card>
+  <Card
+    title="Template Management"
+    icon="file-lines"
+  >
+    Create and manage message templates approved by Meta.
+  </Card>
+  <Card
+    title="Bulk Messaging"
+    icon="paper-plane"
+  >
+    Send campaigns to multiple contacts efficiently.
+  </Card>
+  <Card
+    title="Chatbot Automation"
+    icon="robot"
+  >
+    Keyword-based auto-replies, conversation flows, and AI-powered responses.
+  </Card>
+</CardGroup>
+
+## Tech Stack
+
+### Backend
+- **Go 1.21+** with [Fastglue](https://github.com/zerodha/fastglue) (fasthttp-based HTTP framework)
+- **PostgreSQL** for data storage with GORM v2
+- **Redis** for caching and pub/sub
+- **JWT** for authentication
+
+### Frontend
+- **Vue 3** with Composition API and TypeScript
+- **Vite** for build tooling
+- **shadcn-vue** / Radix Vue for UI components
+- **TailwindCSS** for styling
+- **Pinia** for state management
+- **Vue Query** for server state
+
+## Quick Links
+
+<CardGroup cols={2}>
+  <Card
+    title="Quickstart"
+    icon="rocket"
+    href="/getting-started/quickstart"
+  >
+    Get up and running in minutes
+  </Card>
+  <Card
+    title="API Reference"
+    icon="code"
+    href="/api-reference/overview"
+  >
+    Explore the REST API
+  </Card>
+</CardGroup>
