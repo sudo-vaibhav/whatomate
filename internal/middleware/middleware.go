@@ -6,10 +6,11 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/valyala/fasthttp"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 	"github.com/zerodha/logf"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -54,7 +55,7 @@ func CORS() fastglue.FastMiddleware {
 
 		r.RequestCtx.Response.Header.Set("Access-Control-Allow-Origin", origin)
 		r.RequestCtx.Response.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
-		r.RequestCtx.Response.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+		r.RequestCtx.Response.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key, X-Requested-With")
 		r.RequestCtx.Response.Header.Set("Access-Control-Allow-Credentials", "true")
 		r.RequestCtx.Response.Header.Set("Access-Control-Max-Age", "86400")
 
@@ -82,10 +83,28 @@ func Recovery(log logf.Logger) fastglue.FastMiddleware {
 	}
 }
 
-// Auth validates JWT tokens
+// Auth validates JWT tokens (legacy - use AuthWithDB for API key support)
 func Auth(secret string) fastglue.FastMiddleware {
+	return AuthWithDB(secret, nil)
+}
+
+// AuthWithDB validates both JWT tokens and API keys
+func AuthWithDB(secret string, db *gorm.DB) fastglue.FastMiddleware {
 	return func(r *fastglue.Request) *fastglue.Request {
 		authHeader := string(r.RequestCtx.Request.Header.Peek("Authorization"))
+		apiKey := string(r.RequestCtx.Request.Header.Peek("X-API-Key"))
+
+		// Try API key authentication first
+		if apiKey != "" && db != nil {
+			if validateAPIKey(r, apiKey, db) {
+				return r
+			}
+			// API key was provided but invalid
+			r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Invalid API key", nil, "")
+			return nil
+		}
+
+		// Fall back to JWT authentication
 		if authHeader == "" {
 			r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Missing authorization header", nil, "")
 			return nil
@@ -124,6 +143,50 @@ func Auth(secret string) fastglue.FastMiddleware {
 
 		return r
 	}
+}
+
+// validateAPIKey validates an API key and sets context values
+func validateAPIKey(r *fastglue.Request, key string, db *gorm.DB) bool {
+	// API key format: whm_<32 hex chars>
+	if len(key) != 36 || key[:4] != "whm_" {
+		return false
+	}
+
+	// Extract prefix for lookup (first 8 chars after "whm_")
+	keyPrefix := key[4:12]
+
+	// Find API keys with matching prefix
+	var apiKeys []models.APIKey
+	if err := db.Preload("User").Where("key_prefix = ? AND is_active = ?", keyPrefix, true).Find(&apiKeys).Error; err != nil {
+		return false
+	}
+
+	// Check each key with bcrypt
+	for _, apiKey := range apiKeys {
+		if err := bcrypt.CompareHashAndPassword([]byte(apiKey.KeyHash), []byte(key)); err == nil {
+			// Key matches - check expiration
+			if apiKey.ExpiresAt != nil && time.Now().After(*apiKey.ExpiresAt) {
+				return false // Key expired
+			}
+
+			// Update last used timestamp (async to not block request)
+			go func(id uuid.UUID) {
+				now := time.Now()
+				db.Model(&models.APIKey{}).Where("id = ?", id).Update("last_used_at", now)
+			}(apiKey.ID)
+
+			// Set context values from the user who created the key
+			if apiKey.User != nil {
+				r.RequestCtx.SetUserValue(ContextKeyUserID, apiKey.UserID)
+				r.RequestCtx.SetUserValue(ContextKeyOrganizationID, apiKey.OrganizationID)
+				r.RequestCtx.SetUserValue(ContextKeyEmail, apiKey.User.Email)
+				r.RequestCtx.SetUserValue(ContextKeyRole, apiKey.User.Role)
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // OrganizationContext loads organization and user from database

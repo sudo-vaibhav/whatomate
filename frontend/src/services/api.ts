@@ -93,6 +93,13 @@ export const usersService = {
   me: () => api.get('/me')
 }
 
+export const apiKeysService = {
+  list: () => api.get('/api-keys'),
+  create: (data: { name: string; expires_at?: string }) =>
+    api.post('/api-keys', data),
+  delete: (id: string) => api.delete(`/api-keys/${id}`)
+}
+
 export const accountsService = {
   list: () => api.get('/accounts'),
   get: (id: string) => api.get(`/accounts/${id}`),

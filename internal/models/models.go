@@ -119,6 +119,27 @@ func (User) TableName() string {
 	return "users"
 }
 
+// APIKey represents an API key for programmatic access
+type APIKey struct {
+	BaseModel
+	OrganizationID uuid.UUID  `gorm:"type:uuid;index;not null" json:"organization_id"`
+	UserID         uuid.UUID  `gorm:"type:uuid;index;not null" json:"user_id"` // Creator
+	Name           string     `gorm:"size:255;not null" json:"name"`
+	KeyPrefix      string     `gorm:"size:8;index" json:"key_prefix"` // First 8 chars for identification
+	KeyHash        string     `gorm:"size:255;not null" json:"-"`     // bcrypt hash of full key
+	LastUsedAt     *time.Time `json:"last_used_at,omitempty"`
+	ExpiresAt      *time.Time `json:"expires_at,omitempty"` // null = never expires
+	IsActive       bool       `gorm:"default:true" json:"is_active"`
+
+	// Relations
+	Organization *Organization `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`
+	User         *User         `gorm:"foreignKey:UserID" json:"user,omitempty"`
+}
+
+func (APIKey) TableName() string {
+	return "api_keys"
+}
+
 // WhatsAppAccount represents a WhatsApp Business Account
 type WhatsAppAccount struct {
 	BaseModel

@@ -49,6 +49,7 @@ func AutoMigrate(db *gorm.DB) error {
 		// Core models
 		&models.Organization{},
 		&models.User{},
+		&models.APIKey{},
 		&models.WhatsAppAccount{},
 		&models.Contact{},
 		&models.Message{},

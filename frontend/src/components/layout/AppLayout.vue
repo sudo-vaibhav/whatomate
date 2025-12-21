@@ -86,7 +86,8 @@ const allNavItems = [
     children: [
       { name: 'General', path: '/settings', icon: Settings },
       { name: 'Accounts', path: '/settings/accounts', icon: Users },
-      { name: 'Users', path: '/settings/users', icon: Users, roles: ['admin'] }
+      { name: 'Users', path: '/settings/users', icon: Users, roles: ['admin'] },
+      { name: 'API Keys', path: '/settings/api-keys', icon: Key, roles: ['admin'] }
     ]
   }
 ]

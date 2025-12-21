@@ -165,9 +165,9 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger) {
 			path == "/api/webhook" || path == "/ws" {
 			return r
 		}
-		// Apply auth for all other /api routes
+		// Apply auth for all other /api routes (supports both JWT and API key)
 		if len(path) > 4 && path[:4] == "/api" {
-			return middleware.Auth(app.Config.JWT.Secret)(r)
+			return middleware.AuthWithDB(app.Config.JWT.Secret, app.DB)(r)
 		}
 		return r
 	})
@@ -188,8 +188,9 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger) {
 			return r // Auth middleware will handle unauthenticated requests
 		}
 
-		// Admin-only routes: user management
-		if len(path) >= 10 && path[:10] == "/api/users" {
+		// Admin-only routes: user management and API keys
+		if (len(path) >= 10 && path[:10] == "/api/users") ||
+			(len(path) >= 13 && path[:13] == "/api/api-keys") {
 			if role != "admin" {
 				r.RequestCtx.SetStatusCode(403)
 				r.RequestCtx.SetBodyString(`{"status":"error","message":"Admin access required"}`)
@@ -235,6 +236,11 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger) {
 	g.GET("/api/users/{id}", app.GetUser)
 	g.PUT("/api/users/{id}", app.UpdateUser)
 	g.DELETE("/api/users/{id}", app.DeleteUser)
+
+	// API Keys (admin only - enforced by middleware)
+	g.GET("/api/api-keys", app.ListAPIKeys)
+	g.POST("/api/api-keys", app.CreateAPIKey)
+	g.DELETE("/api/api-keys/{id}", app.DeleteAPIKey)
 
 	// Accounts
 	g.GET("/api/accounts", app.ListAccounts)
