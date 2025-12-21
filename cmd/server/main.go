@@ -230,6 +230,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger) {
 	// Current User (all authenticated users)
 	g.GET("/api/me", app.GetCurrentUser)
 	g.PUT("/api/me/settings", app.UpdateCurrentUserSettings)
+	g.PUT("/api/me/password", app.ChangePassword)
 
 	// User Management (admin only - enforced by middleware)
 	g.GET("/api/users", app.ListUsers)

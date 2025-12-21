@@ -18,10 +18,20 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { toast } from 'vue-sonner'
-import { Settings, Bot, Bell, Shield, Loader2, Brain } from 'lucide-vue-next'
+import { Settings, Bot, Bell, Shield, Loader2, Brain, Eye, EyeOff } from 'lucide-vue-next'
 import { chatbotService, usersService } from '@/services/api'
 
 const isSubmitting = ref(false)
+const isChangingPassword = ref(false)
+const showCurrentPassword = ref(false)
+const showNewPassword = ref(false)
+const showConfirmPassword = ref(false)
+
+const passwordForm = ref({
+  current_password: '',
+  new_password: '',
+  confirm_password: ''
+})
 
 const generalSettings = ref({
   organization_name: 'My Organization',
@@ -179,6 +189,40 @@ async function saveNotificationSettings() {
     toast.error('Failed to save notification settings')
   } finally {
     isSubmitting.value = false
+  }
+}
+
+async function changePassword() {
+  // Validate passwords match
+  if (passwordForm.value.new_password !== passwordForm.value.confirm_password) {
+    toast.error('New passwords do not match')
+    return
+  }
+
+  // Validate password length
+  if (passwordForm.value.new_password.length < 6) {
+    toast.error('New password must be at least 6 characters')
+    return
+  }
+
+  isChangingPassword.value = true
+  try {
+    await usersService.changePassword({
+      current_password: passwordForm.value.current_password,
+      new_password: passwordForm.value.new_password
+    })
+    toast.success('Password changed successfully')
+    // Clear the form
+    passwordForm.value = {
+      current_password: '',
+      new_password: '',
+      confirm_password: ''
+    }
+  } catch (error: any) {
+    const message = error.response?.data?.message || 'Failed to change password'
+    toast.error(message)
+  } finally {
+    isChangingPassword.value = false
   }
 }
 </script>
@@ -484,24 +528,73 @@ async function saveNotificationSettings() {
           <TabsContent value="security">
             <Card>
               <CardHeader>
-                <CardTitle>Security</CardTitle>
-                <CardDescription>Manage your account security</CardDescription>
+                <CardTitle>Change Password</CardTitle>
+                <CardDescription>Update your account password</CardDescription>
               </CardHeader>
               <CardContent class="space-y-4">
-                <div class="flex items-center justify-between">
-                  <div>
-                    <p class="font-medium">Change Password</p>
-                    <p class="text-sm text-muted-foreground">Update your account password</p>
+                <div class="space-y-2">
+                  <Label for="current_password">Current Password</Label>
+                  <div class="relative">
+                    <Input
+                      id="current_password"
+                      v-model="passwordForm.current_password"
+                      :type="showCurrentPassword ? 'text' : 'password'"
+                      placeholder="Enter current password"
+                    />
+                    <button
+                      type="button"
+                      class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      @click="showCurrentPassword = !showCurrentPassword"
+                    >
+                      <Eye v-if="!showCurrentPassword" class="h-4 w-4" />
+                      <EyeOff v-else class="h-4 w-4" />
+                    </button>
                   </div>
-                  <Button variant="outline">Change Password</Button>
                 </div>
-                <Separator />
-                <div class="flex items-center justify-between">
-                  <div>
-                    <p class="font-medium">Two-Factor Authentication</p>
-                    <p class="text-sm text-muted-foreground">Add an extra layer of security</p>
+                <div class="space-y-2">
+                  <Label for="new_password">New Password</Label>
+                  <div class="relative">
+                    <Input
+                      id="new_password"
+                      v-model="passwordForm.new_password"
+                      :type="showNewPassword ? 'text' : 'password'"
+                      placeholder="Enter new password"
+                    />
+                    <button
+                      type="button"
+                      class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      @click="showNewPassword = !showNewPassword"
+                    >
+                      <Eye v-if="!showNewPassword" class="h-4 w-4" />
+                      <EyeOff v-else class="h-4 w-4" />
+                    </button>
                   </div>
-                  <Button variant="outline">Enable 2FA</Button>
+                  <p class="text-xs text-muted-foreground">Must be at least 6 characters</p>
+                </div>
+                <div class="space-y-2">
+                  <Label for="confirm_password">Confirm New Password</Label>
+                  <div class="relative">
+                    <Input
+                      id="confirm_password"
+                      v-model="passwordForm.confirm_password"
+                      :type="showConfirmPassword ? 'text' : 'password'"
+                      placeholder="Confirm new password"
+                    />
+                    <button
+                      type="button"
+                      class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      @click="showConfirmPassword = !showConfirmPassword"
+                    >
+                      <Eye v-if="!showConfirmPassword" class="h-4 w-4" />
+                      <EyeOff v-else class="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+                <div class="flex justify-end pt-2">
+                  <Button @click="changePassword" :disabled="isChangingPassword || !passwordForm.current_password || !passwordForm.new_password || !passwordForm.confirm_password">
+                    <Loader2 v-if="isChangingPassword" class="mr-2 h-4 w-4 animate-spin" />
+                    Change Password
+                  </Button>
                 </div>
               </CardContent>
             </Card>

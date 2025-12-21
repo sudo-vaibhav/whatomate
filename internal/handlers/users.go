@@ -37,6 +37,12 @@ type UserSettingsRequest struct {
 	CampaignUpdates    bool `json:"campaign_updates"`
 }
 
+// ChangePasswordRequest represents the request body for changing password
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
 // ListUsers returns all users for the organization (admin only)
 func (a *App) ListUsers(r *fastglue.Request) error {
 	orgID, err := getOrganizationID(r)
@@ -340,6 +346,54 @@ func (a *App) UpdateCurrentUserSettings(r *fastglue.Request) error {
 		"message":  "Settings updated successfully",
 		"settings": user.Settings,
 	})
+}
+
+// ChangePassword changes the current user's password
+func (a *App) ChangePassword(r *fastglue.Request) error {
+	userID, ok := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	if !ok {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	var user models.User
+	if err := a.DB.Where("id = ?", userID).First(&user).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "User not found", nil, "")
+	}
+
+	var req ChangePasswordRequest
+	if err := r.Decode(&req, "json"); err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	}
+
+	// Validate required fields
+	if req.CurrentPassword == "" || req.NewPassword == "" {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Current password and new password are required", nil, "")
+	}
+
+	// Validate new password length
+	if len(req.NewPassword) < 6 {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "New password must be at least 6 characters", nil, "")
+	}
+
+	// Verify current password
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.CurrentPassword)); err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Current password is incorrect", nil, "")
+	}
+
+	// Hash new password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		a.Log.Error("Failed to hash password", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to change password", nil, "")
+	}
+
+	user.PasswordHash = string(hashedPassword)
+	if err := a.DB.Save(&user).Error; err != nil {
+		a.Log.Error("Failed to update password", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to change password", nil, "")
+	}
+
+	return r.SendEnvelope(map[string]string{"message": "Password changed successfully"})
 }
 
 // Helper function to convert User to UserResponse
