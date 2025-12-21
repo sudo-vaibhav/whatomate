@@ -1,19 +1,16 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { RouterLink, RouterView, useRoute } from 'vue-router'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
+  Popover,
+  PopoverContent,
+  PopoverTrigger
+} from '@/components/ui/popover'
 import {
   LayoutDashboard,
   MessageSquare,
@@ -32,27 +29,30 @@ import {
 import { getInitials } from '@/lib/utils'
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const isCollapsed = ref(false)
+const isUserMenuOpen = ref(false)
 
-const navigation = computed(() => [
+// Define all navigation items with role requirements
+const allNavItems = [
   {
     name: 'Dashboard',
     path: '/',
     icon: LayoutDashboard,
-    active: route.name === 'dashboard'
+    roles: ['admin', 'manager']
   },
   {
     name: 'Chat',
     path: '/chat',
     icon: MessageSquare,
-    active: route.name === 'chat' || route.name === 'chat-conversation'
+    roles: ['admin', 'manager', 'agent']
   },
   {
     name: 'Chatbot',
     path: '/chatbot',
     icon: Bot,
-    active: route.path.startsWith('/chatbot'),
+    roles: ['admin', 'manager'],
     children: [
       { name: 'Overview', path: '/chatbot', icon: Bot },
       { name: 'Keywords', path: '/chatbot/keywords', icon: Key },
@@ -64,31 +64,51 @@ const navigation = computed(() => [
     name: 'Templates',
     path: '/templates',
     icon: FileText,
-    active: route.name === 'templates'
+    roles: ['admin', 'manager']
   },
   {
     name: 'Flows',
     path: '/flows',
     icon: Workflow,
-    active: route.name === 'flows'
+    roles: ['admin', 'manager']
   },
   {
     name: 'Campaigns',
     path: '/campaigns',
     icon: Megaphone,
-    active: route.name === 'campaigns'
+    roles: ['admin', 'manager']
   },
   {
     name: 'Settings',
     path: '/settings',
     icon: Settings,
-    active: route.path.startsWith('/settings'),
+    roles: ['admin', 'manager'],
     children: [
       { name: 'General', path: '/settings', icon: Settings },
-      { name: 'Accounts', path: '/settings/accounts', icon: Users }
+      { name: 'Accounts', path: '/settings/accounts', icon: Users },
+      { name: 'Users', path: '/settings/users', icon: Users, roles: ['admin'] }
     ]
   }
-])
+]
+
+// Filter navigation based on user role
+const navigation = computed(() => {
+  const userRole = authStore.userRole || 'agent'
+
+  return allNavItems
+    .filter(item => item.roles.includes(userRole))
+    .map(item => ({
+      ...item,
+      active: item.path === '/'
+        ? route.name === 'dashboard'
+        : item.path === '/chat'
+          ? route.name === 'chat' || route.name === 'chat-conversation'
+          : route.path.startsWith(item.path),
+      children: item.children?.filter(
+        child => !child.roles || child.roles.includes(userRole)
+      )
+    }))
+})
 
 const toggleSidebar = () => {
   isCollapsed.value = !isCollapsed.value
@@ -96,6 +116,7 @@ const toggleSidebar = () => {
 
 const handleLogout = async () => {
   await authStore.logout()
+  router.push('/login')
 }
 </script>
 
@@ -173,13 +194,13 @@ const handleLogout = async () => {
 
       <!-- User section -->
       <div class="border-t p-4">
-        <DropdownMenu>
-          <DropdownMenuTrigger as-child>
+        <Popover v-model:open="isUserMenuOpen">
+          <PopoverTrigger as-child>
             <Button
               variant="ghost"
               :class="[
-                'w-full justify-start gap-3',
-                isCollapsed && 'justify-center px-2'
+                'flex items-center w-full h-auto px-2 py-2 gap-3',
+                isCollapsed && 'justify-center'
               ]"
             >
               <Avatar class="h-8 w-8">
@@ -197,16 +218,20 @@ const handleLogout = async () => {
                 </span>
               </div>
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" class="w-56">
-            <DropdownMenuLabel>My Account</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem @click="handleLogout">
+          </PopoverTrigger>
+          <PopoverContent side="top" align="start" class="w-56 p-2">
+            <div class="text-sm font-medium px-2 py-1.5 text-muted-foreground">My Account</div>
+            <Separator class="my-1" />
+            <Button
+              variant="ghost"
+              class="w-full justify-start px-2 py-1.5 h-auto font-normal"
+              @click="handleLogout"
+            >
               <LogOut class="mr-2 h-4 w-4" />
               <span>Log out</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            </Button>
+          </PopoverContent>
+        </Popover>
       </div>
     </aside>
 

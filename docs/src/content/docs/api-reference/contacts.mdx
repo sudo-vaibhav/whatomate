@@ -9,6 +9,10 @@ import { Aside } from '@astrojs/starlight/components';
 
 Contacts represent WhatsApp users you communicate with. Each contact stores their phone number, profile information, and conversation history.
 
+<Aside type="note">
+  **Role-based access**: Agents can only see and interact with contacts assigned to them. Admins and Managers can see all contacts.
+</Aside>
+
 ## List Contacts
 
 Retrieve a paginated list of contacts.
@@ -176,6 +180,10 @@ DELETE /api/contacts/{id}
 
 Assign a contact to a team member.
 
+<Aside type="caution">
+  This endpoint requires **Admin** or **Manager** role.
+</Aside>
+
 ```bash
 PUT /api/contacts/{id}/assign
 ```
@@ -185,6 +193,14 @@ PUT /api/contacts/{id}/assign
 ```json
 {
   "user_id": "uuid"
+}
+```
+
+To unassign a contact, set `user_id` to `null`:
+
+```json
+{
+  "user_id": null
 }
 ```
 

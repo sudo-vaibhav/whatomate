@@ -2,7 +2,10 @@
 import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useContactsStore, type Contact, type Message } from '@/stores/contacts'
+import { useAuthStore } from '@/stores/auth'
+import { useUsersStore } from '@/stores/users'
 import { wsService } from '@/services/websocket'
+import { contactsService } from '@/services/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -16,6 +19,21 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { toast } from 'vue-sonner'
 import {
   Search,
@@ -31,19 +49,47 @@ import {
   CheckCheck,
   Clock,
   AlertCircle,
-  User
+  User,
+  UserPlus,
+  UserMinus
 } from 'lucide-vue-next'
 import { formatTime, getInitials, truncate } from '@/lib/utils'
 
 const route = useRoute()
 const router = useRouter()
 const contactsStore = useContactsStore()
+const authStore = useAuthStore()
+const usersStore = useUsersStore()
 
 const messageInput = ref('')
 const messagesEndRef = ref<HTMLElement | null>(null)
 const isSending = ref(false)
+const isAssignDialogOpen = ref(false)
 
 const contactId = computed(() => route.params.contactId as string | undefined)
+
+// Check if current user can assign contacts (admin or manager only)
+const canAssignContacts = computed(() => {
+  // Try store first, then fallback to localStorage
+  let role = authStore.userRole
+  if (!role || role === 'agent') {
+    try {
+      const storedUser = localStorage.getItem('user')
+      if (storedUser) {
+        const user = JSON.parse(storedUser)
+        role = user.role
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return role === 'admin' || role === 'manager'
+})
+
+// Get list of users for assignment
+const assignableUsers = computed(() => {
+  return usersStore.users.filter(u => u.is_active)
+})
 
 // Initialize WebSocket connection
 function initWebSocket() {
@@ -55,8 +101,20 @@ function initWebSocket() {
 
 // Fetch contacts on mount and connect WebSocket
 onMounted(async () => {
+  // Ensure auth session is restored
+  if (!authStore.isAuthenticated) {
+    authStore.restoreSession()
+  }
+
   await contactsStore.fetchContacts()
   initWebSocket()
+
+  // Fetch users if can assign contacts
+  if (canAssignContacts.value) {
+    usersStore.fetchUsers().catch(() => {
+      // Silently fail if user list can't be loaded
+    })
+  }
 
   if (contactId.value) {
     await selectContact(contactId.value)
@@ -115,6 +173,20 @@ async function sendMessage() {
     toast.error('Failed to send message')
   } finally {
     isSending.value = false
+  }
+}
+
+async function assignContactToUser(userId: string | null) {
+  if (!contactsStore.currentContact) return
+
+  try {
+    await contactsService.assign(contactsStore.currentContact.id, userId)
+    toast.success(userId ? 'Contact assigned successfully' : 'Contact unassigned')
+    // Refresh contacts list
+    await contactsStore.fetchContacts()
+  } catch (error: any) {
+    const message = error.response?.data?.message || 'Failed to assign contact'
+    toast.error(message)
   }
 }
 
@@ -289,6 +361,14 @@ function getMessageContent(message: Message): string {
             </div>
           </div>
           <div class="flex items-center gap-2">
+            <Tooltip v-if="canAssignContacts">
+              <TooltipTrigger as-child>
+                <Button variant="ghost" size="icon" @click="isAssignDialogOpen = true">
+                  <UserPlus class="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Assign to agent</TooltipContent>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger as-child>
                 <Button variant="ghost" size="icon">
@@ -305,14 +385,25 @@ function getMessageContent(message: Message): string {
               </TooltipTrigger>
               <TooltipContent>Video call</TooltipContent>
             </Tooltip>
-            <Tooltip>
-              <TooltipTrigger as-child>
+            <DropdownMenu>
+              <DropdownMenuTrigger as-child>
                 <Button variant="ghost" size="icon">
                   <MoreVertical class="h-5 w-5" />
                 </Button>
-              </TooltipTrigger>
-              <TooltipContent>More options</TooltipContent>
-            </Tooltip>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Contact Options</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem v-if="canAssignContacts" @click="isAssignDialogOpen = true">
+                  <UserPlus class="mr-2 h-4 w-4" />
+                  <span>Assign to agent</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled>
+                  <User class="mr-2 h-4 w-4" />
+                  <span>View contact details</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -397,5 +488,41 @@ function getMessageContent(message: Message): string {
         </div>
       </template>
     </div>
+
+    <!-- Assign Contact Dialog -->
+    <Dialog v-model:open="isAssignDialogOpen">
+      <DialogContent class="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Assign Contact</DialogTitle>
+          <DialogDescription>
+            Select a team member to assign this contact to.
+          </DialogDescription>
+        </DialogHeader>
+        <div class="py-4 space-y-2">
+          <Button
+            variant="outline"
+            class="w-full justify-start"
+            @click="assignContactToUser(null); isAssignDialogOpen = false"
+          >
+            <UserMinus class="mr-2 h-4 w-4" />
+            Unassign
+          </Button>
+          <Separator />
+          <Button
+            v-for="user in assignableUsers"
+            :key="user.id"
+            variant="ghost"
+            class="w-full justify-start"
+            @click="assignContactToUser(user.id); isAssignDialogOpen = false"
+          >
+            <User class="mr-2 h-4 w-4" />
+            <span>{{ user.full_name }}</span>
+            <Badge variant="outline" class="ml-auto text-xs">
+              {{ user.role }}
+            </Badge>
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>

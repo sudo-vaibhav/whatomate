@@ -1,0 +1,185 @@
+---
+title: Users
+description: User management API (Admin only)
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+  All user management endpoints require **Admin** role. Other roles will receive a 403 Forbidden response.
+</Aside>
+
+## Overview
+
+Manage users within your organization. Users can have different roles that control their access to features.
+
+## Roles
+
+| Role | Description |
+|------|-------------|
+| `admin` | Full access including user management |
+| `manager` | Full access except user management |
+| `agent` | Can only chat with assigned contacts |
+
+## List Users
+
+Retrieve all users in your organization.
+
+```bash
+GET /api/users
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": "uuid",
+      "email": "user@example.com",
+      "full_name": "John Doe",
+      "role": "agent",
+      "is_active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  ]
+}
+```
+
+## Get User
+
+Retrieve a single user.
+
+```bash
+GET /api/users/{id}
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "email": "user@example.com",
+    "full_name": "John Doe",
+    "role": "agent",
+    "is_active": true,
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+## Create User
+
+Create a new user in your organization.
+
+```bash
+POST /api/users
+```
+
+### Request Body
+
+```json
+{
+  "email": "newuser@example.com",
+  "password": "securepassword",
+  "full_name": "Jane Smith",
+  "role": "agent"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `email` | string | Yes | Unique email address |
+| `password` | string | Yes | Minimum 8 characters |
+| `full_name` | string | Yes | Display name |
+| `role` | string | No | One of: `admin`, `manager`, `agent`. Defaults to `agent` |
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "email": "newuser@example.com",
+    "full_name": "Jane Smith",
+    "role": "agent",
+    "is_active": true,
+    "created_at": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+## Update User
+
+Update user details or role.
+
+```bash
+PUT /api/users/{id}
+```
+
+### Request Body
+
+```json
+{
+  "full_name": "Jane Doe",
+  "role": "manager",
+  "is_active": true
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `email` | string | New email address |
+| `password` | string | New password (min 8 chars) |
+| `full_name` | string | Display name |
+| `role` | string | One of: `admin`, `manager`, `agent` |
+| `is_active` | boolean | Enable/disable user |
+
+<Aside type="note">
+  You cannot demote yourself or change your own role.
+</Aside>
+
+## Delete User
+
+Remove a user from the organization.
+
+```bash
+DELETE /api/users/{id}
+```
+
+<Aside type="caution">
+  - You cannot delete yourself
+  - You cannot delete the last admin user
+  - Deleting a user will unassign all their contacts
+</Aside>
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "User deleted successfully"
+  }
+}
+```
+
+## Role Permissions
+
+| Feature | Admin | Manager | Agent |
+|---------|-------|---------|-------|
+| User Management | Full | None | None |
+| Account Settings | Full | Full | None |
+| Contacts | Full | Full | Assigned only |
+| Messages | Full | Full | Assigned only |
+| Templates | Full | Full | None |
+| Flows | Full | Full | None |
+| Campaigns | Full | Full | None |
+| Chatbot Settings | Full | Full | None |
+| Analytics | Full | Full | None |

@@ -35,6 +35,7 @@ export default defineConfig({
           items: [
             { label: 'Overview', slug: 'api-reference/overview' },
             { label: 'Authentication', slug: 'api-reference/authentication' },
+            { label: 'Users', slug: 'api-reference/users' },
             { label: 'Accounts', slug: 'api-reference/accounts' },
             { label: 'Contacts', slug: 'api-reference/contacts' },
             { label: 'Messages', slug: 'api-reference/messages' },

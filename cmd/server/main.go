@@ -172,6 +172,70 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger) {
 		return r
 	})
 
+	// Role-based access control middleware
+	g.Before(func(r *fastglue.Request) *fastglue.Request {
+		path := string(r.RequestCtx.Path())
+		method := string(r.RequestCtx.Method())
+
+		// Only apply to authenticated API routes
+		if len(path) < 4 || path[:4] != "/api" {
+			return r
+		}
+
+		// Get role from context (set by auth middleware)
+		role, ok := r.RequestCtx.UserValue("role").(string)
+		if !ok {
+			return r // Auth middleware will handle unauthenticated requests
+		}
+
+		// Admin-only routes: user management
+		if len(path) >= 10 && path[:10] == "/api/users" {
+			if role != "admin" {
+				r.RequestCtx.SetStatusCode(403)
+				r.RequestCtx.SetBodyString(`{"status":"error","message":"Admin access required"}`)
+				return nil
+			}
+		}
+
+		// Manager+ routes: agents cannot access these
+		if role == "agent" {
+			managerRoutes := []string{
+				"/api/accounts",
+				"/api/templates",
+				"/api/flows",
+				"/api/campaigns",
+				"/api/chatbot",
+				"/api/analytics",
+			}
+			for _, prefix := range managerRoutes {
+				if len(path) >= len(prefix) && path[:len(prefix)] == prefix {
+					r.RequestCtx.SetStatusCode(403)
+					r.RequestCtx.SetBodyString(`{"status":"error","message":"Access denied"}`)
+					return nil
+				}
+			}
+
+			// Agents can only create contacts, not modify/delete
+			if len(path) >= 13 && path[:13] == "/api/contacts" {
+				if method == "PUT" || method == "DELETE" {
+					// Allow only if it's their assigned contact (checked in handler)
+				}
+			}
+		}
+
+		return r
+	})
+
+	// Current User (all authenticated users)
+	g.GET("/api/me", app.GetCurrentUser)
+
+	// User Management (admin only - enforced by middleware)
+	g.GET("/api/users", app.ListUsers)
+	g.POST("/api/users", app.CreateUser)
+	g.GET("/api/users/{id}", app.GetUser)
+	g.PUT("/api/users/{id}", app.UpdateUser)
+	g.DELETE("/api/users/{id}", app.DeleteUser)
+
 	// Accounts
 	g.GET("/api/accounts", app.ListAccounts)
 	g.POST("/api/accounts", app.CreateAccount)

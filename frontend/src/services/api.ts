@@ -30,8 +30,11 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
 
-    // Handle 401 errors - try to refresh token
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Skip token refresh logic for auth endpoints
+    const isAuthEndpoint = originalRequest?.url?.startsWith('/auth/')
+
+    // Handle 401 errors - try to refresh token (but not for auth endpoints)
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       originalRequest._retry = true
 
       const refreshToken = localStorage.getItem('refresh_token')
@@ -79,6 +82,17 @@ export const authService = {
   me: () => api.get('/auth/me')
 }
 
+export const usersService = {
+  list: () => api.get('/users'),
+  get: (id: string) => api.get(`/users/${id}`),
+  create: (data: { email: string; password: string; full_name: string; role?: string }) =>
+    api.post('/users', data),
+  update: (id: string, data: { email?: string; password?: string; full_name?: string; role?: string; is_active?: boolean }) =>
+    api.put(`/users/${id}`, data),
+  delete: (id: string) => api.delete(`/users/${id}`),
+  me: () => api.get('/me')
+}
+
 export const accountsService = {
   list: () => api.get('/accounts'),
   get: (id: string) => api.get(`/accounts/${id}`),
@@ -94,6 +108,8 @@ export const contactsService = {
   create: (data: any) => api.post('/contacts', data),
   update: (id: string, data: any) => api.put(`/contacts/${id}`, data),
   delete: (id: string) => api.delete(`/contacts/${id}`),
+  assign: (id: string, userId: string | null) =>
+    api.put(`/contacts/${id}/assign`, { user_id: userId }),
   import: (file: File) => {
     const formData = new FormData()
     formData.append('file', file)

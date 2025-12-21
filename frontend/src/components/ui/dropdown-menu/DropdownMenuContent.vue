@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 
 const props = defineProps<{
   class?: string
+  side?: 'top' | 'right' | 'bottom' | 'left'
   sideOffset?: number
   align?: 'start' | 'center' | 'end'
 }>()
@@ -12,6 +13,7 @@ const props = defineProps<{
 <template>
   <DropdownMenuPortal>
     <DropdownMenuContentPrimitive
+      :side="side"
       :side-offset="sideOffset ?? 4"
       :align="align ?? 'center'"
       :class="cn(

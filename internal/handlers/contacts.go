@@ -48,8 +48,11 @@ type MessageResponse struct {
 }
 
 // ListContacts returns all contacts for the organization
+// Agents only see contacts assigned to them
 func (a *App) ListContacts(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
+	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	userRole, _ := r.RequestCtx.UserValue("role").(string)
 
 	// Pagination
 	page, _ := strconv.Atoi(string(r.RequestCtx.QueryArgs().Peek("page")))
@@ -66,6 +69,11 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 
 	var contacts []models.Contact
 	query := a.DB.Where("organization_id = ?", orgID)
+
+	// Agents can only see contacts assigned to them
+	if userRole == "agent" {
+		query = query.Where("assigned_user_id = ?", userID)
+	}
 
 	if search != "" {
 		searchPattern := "%" + search + "%"
@@ -126,8 +134,11 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 }
 
 // GetContact returns a single contact
+// Agents can only access contacts assigned to them
 func (a *App) GetContact(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
+	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	userRole, _ := r.RequestCtx.UserValue("role").(string)
 	contactIDStr := r.RequestCtx.UserValue("id").(string)
 
 	contactID, err := uuid.Parse(contactIDStr)
@@ -136,7 +147,14 @@ func (a *App) GetContact(r *fastglue.Request) error {
 	}
 
 	var contact models.Contact
-	if err := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID).First(&contact).Error; err != nil {
+	query := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID)
+
+	// Agents can only access their assigned contacts
+	if userRole == "agent" {
+		query = query.Where("assigned_user_id = ?", userID)
+	}
+
+	if err := query.First(&contact).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
 	}
 
@@ -174,8 +192,11 @@ func (a *App) GetContact(r *fastglue.Request) error {
 }
 
 // GetMessages returns messages for a contact
+// Agents can only access messages for their assigned contacts
 func (a *App) GetMessages(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
+	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	userRole, _ := r.RequestCtx.UserValue("role").(string)
 	contactIDStr := r.RequestCtx.UserValue("id").(string)
 
 	contactID, err := uuid.Parse(contactIDStr)
@@ -183,9 +204,13 @@ func (a *App) GetMessages(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact ID", nil, "")
 	}
 
-	// Verify contact belongs to org
+	// Verify contact belongs to org (and to agent if role is agent)
 	var contact models.Contact
-	if err := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID).First(&contact).Error; err != nil {
+	query := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID)
+	if userRole == "agent" {
+		query = query.Where("assigned_user_id = ?", userID)
+	}
+	if err := query.First(&contact).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
 	}
 
@@ -203,8 +228,8 @@ func (a *App) GetMessages(r *fastglue.Request) error {
 	var messages []models.Message
 	var total int64
 
-	query := a.DB.Where("contact_id = ?", contactID)
-	query.Model(&models.Message{}).Count(&total)
+	msgQuery := a.DB.Where("contact_id = ?", contactID)
+	msgQuery.Model(&models.Message{}).Count(&total)
 
 	// For chat, we want the most recent messages
 	// Fetch in DESC order (newest first), then reverse for display
@@ -215,7 +240,7 @@ func (a *App) GetMessages(r *fastglue.Request) error {
 		offset = 0
 	}
 
-	if err := query.Order("created_at ASC").Offset(offset).Limit(limit).Find(&messages).Error; err != nil {
+	if err := msgQuery.Order("created_at ASC").Offset(offset).Limit(limit).Find(&messages).Error; err != nil {
 		a.Log.Error("Failed to list messages", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list messages", nil, "")
 	}
@@ -270,8 +295,11 @@ type SendMessageRequest struct {
 }
 
 // SendMessage sends a message to a contact
+// Agents can only send messages to their assigned contacts
 func (a *App) SendMessage(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
+	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	userRole, _ := r.RequestCtx.UserValue("role").(string)
 	contactIDStr := r.RequestCtx.UserValue("id").(string)
 
 	contactID, err := uuid.Parse(contactIDStr)
@@ -285,9 +313,13 @@ func (a *App) SendMessage(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
 	}
 
-	// Get contact
+	// Get contact (agents can only message their assigned contacts)
 	var contact models.Contact
-	if err := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID).First(&contact).Error; err != nil {
+	query := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID)
+	if userRole == "agent" {
+		query = query.Where("assigned_user_id = ?", userID)
+	}
+	if err := query.First(&contact).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
 	}
 

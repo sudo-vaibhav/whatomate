@@ -1,6 +1,14 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
+// Role-based route meta type
+declare module 'vue-router' {
+  interface RouteMeta {
+    requiresAuth?: boolean
+    roles?: ('admin' | 'manager' | 'agent')[]
+  }
+}
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -24,63 +32,81 @@ const router = createRouter({
         {
           path: '',
           name: 'dashboard',
-          component: () => import('@/views/dashboard/DashboardView.vue')
+          component: () => import('@/views/dashboard/DashboardView.vue'),
+          meta: { roles: ['admin', 'manager'] }
         },
         {
           path: 'chat',
           name: 'chat',
           component: () => import('@/views/chat/ChatView.vue')
+          // All roles can access chat
         },
         {
           path: 'chat/:contactId',
           name: 'chat-conversation',
           component: () => import('@/views/chat/ChatView.vue'),
           props: true
+          // All roles can access chat
         },
         {
           path: 'templates',
           name: 'templates',
-          component: () => import('@/views/settings/TemplatesView.vue')
+          component: () => import('@/views/settings/TemplatesView.vue'),
+          meta: { roles: ['admin', 'manager'] }
         },
         {
           path: 'flows',
           name: 'flows',
-          component: () => import('@/views/settings/FlowsView.vue')
+          component: () => import('@/views/settings/FlowsView.vue'),
+          meta: { roles: ['admin', 'manager'] }
         },
         {
           path: 'campaigns',
           name: 'campaigns',
-          component: () => import('@/views/settings/CampaignsView.vue')
+          component: () => import('@/views/settings/CampaignsView.vue'),
+          meta: { roles: ['admin', 'manager'] }
         },
         {
           path: 'chatbot',
           name: 'chatbot',
-          component: () => import('@/views/chatbot/ChatbotView.vue')
+          component: () => import('@/views/chatbot/ChatbotView.vue'),
+          meta: { roles: ['admin', 'manager'] }
         },
         {
           path: 'chatbot/keywords',
           name: 'chatbot-keywords',
-          component: () => import('@/views/chatbot/KeywordsView.vue')
+          component: () => import('@/views/chatbot/KeywordsView.vue'),
+          meta: { roles: ['admin', 'manager'] }
         },
         {
           path: 'chatbot/flows',
           name: 'chatbot-flows',
-          component: () => import('@/views/chatbot/ChatbotFlowsView.vue')
+          component: () => import('@/views/chatbot/ChatbotFlowsView.vue'),
+          meta: { roles: ['admin', 'manager'] }
         },
         {
           path: 'chatbot/ai',
           name: 'chatbot-ai',
-          component: () => import('@/views/chatbot/AIContextsView.vue')
+          component: () => import('@/views/chatbot/AIContextsView.vue'),
+          meta: { roles: ['admin', 'manager'] }
         },
         {
           path: 'settings',
           name: 'settings',
-          component: () => import('@/views/settings/SettingsView.vue')
+          component: () => import('@/views/settings/SettingsView.vue'),
+          meta: { roles: ['admin', 'manager'] }
         },
         {
           path: 'settings/accounts',
           name: 'accounts',
-          component: () => import('@/views/settings/AccountsView.vue')
+          component: () => import('@/views/settings/AccountsView.vue'),
+          meta: { roles: ['admin', 'manager'] }
+        },
+        {
+          path: 'settings/users',
+          name: 'users',
+          component: () => import('@/views/settings/UsersView.vue'),
+          meta: { roles: ['admin'] }
         }
       ]
     },
@@ -105,10 +131,29 @@ router.beforeEach(async (to, from, next) => {
         return next({ name: 'login', query: { redirect: to.fullPath } })
       }
     }
+
+    // Check role-based access
+    const requiredRoles = to.meta.roles
+    if (requiredRoles && requiredRoles.length > 0) {
+      const userRole = authStore.userRole as 'admin' | 'manager' | 'agent'
+      if (!requiredRoles.includes(userRole)) {
+        // Redirect based on role
+        if (userRole === 'agent') {
+          return next({ name: 'chat' })
+        } else {
+          return next({ name: 'dashboard' })
+        }
+      }
+    }
   } else {
-    // Redirect to dashboard if already logged in
+    // Redirect to appropriate page if already logged in
     if (authStore.isAuthenticated && (to.name === 'login' || to.name === 'register')) {
-      return next({ name: 'dashboard' })
+      const userRole = authStore.userRole
+      if (userRole === 'agent') {
+        return next({ name: 'chat' })
+      } else {
+        return next({ name: 'dashboard' })
+      }
     }
   }
 

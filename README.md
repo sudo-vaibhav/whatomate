@@ -5,6 +5,7 @@ A modern WhatsApp Business Platform built with Go (Fastglue) and Vue.js (shadcn-
 ## Features
 
 - **Multi-tenant Architecture**: Support multiple organizations with isolated data
+- **Role-Based Access Control**: Three roles (Admin, Manager, Agent) with granular permissions
 - **WhatsApp Cloud API Integration**: Connect with Meta's WhatsApp Business API
 - **Real-time Chat**: Live messaging with WebSocket support
 - **Template Management**: Create and manage message templates
@@ -204,9 +205,17 @@ google_api_key = ""
 - `PUT /api/accounts/:id` - Update account
 - `DELETE /api/accounts/:id` - Delete account
 
+### Users (Admin only)
+- `GET /api/users` - List users
+- `POST /api/users` - Create user
+- `GET /api/users/:id` - Get user
+- `PUT /api/users/:id` - Update user
+- `DELETE /api/users/:id` - Delete user
+
 ### Contacts
-- `GET /api/contacts` - List contacts
+- `GET /api/contacts` - List contacts (agents see only assigned)
 - `POST /api/contacts` - Create contact
+- `PUT /api/contacts/:id/assign` - Assign contact to agent
 - `GET /api/contacts/:id/messages` - Get messages
 - `POST /api/contacts/:id/messages` - Send message
 
@@ -235,6 +244,26 @@ google_api_key = ""
 ### Webhooks
 - `GET /api/webhook` - Webhook verification
 - `POST /api/webhook` - Receive messages
+
+## Role-Based Access Control
+
+The platform supports three user roles with different permission levels:
+
+| Feature | Admin | Manager | Agent |
+|---------|-------|---------|-------|
+| User Management | Full | None | None |
+| Account Settings | Full | Full | None |
+| Contacts | Full | Full | Assigned only |
+| Messages | Full | Full | Assigned only |
+| Templates | Full | Full | None |
+| Flows | Full | Full | None |
+| Campaigns | Full | Full | None |
+| Chatbot Settings | Full | Full | None |
+| Analytics | Full | Full | None |
+
+- **Admin**: Full access to all features including user management
+- **Manager**: Full access except cannot manage users
+- **Agent**: Can only chat with contacts assigned to them
 
 ## WhatsApp Setup
 
