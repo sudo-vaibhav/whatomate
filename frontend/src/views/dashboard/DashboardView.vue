@@ -1,9 +1,19 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { RangeCalendar } from '@/components/ui/range-calendar'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
 import { analyticsService } from '@/services/api'
 import {
   MessageSquare,
@@ -13,8 +23,11 @@ import {
   TrendingUp,
   TrendingDown,
   Clock,
-  CheckCheck
+  CheckCheck,
+  CalendarIcon
 } from 'lucide-vue-next'
+import type { DateRange } from 'reka-ui'
+import { type DateValue, CalendarDate } from '@internationalized/date'
 
 interface DashboardStats {
   total_messages: number
@@ -49,6 +62,145 @@ const stats = ref<DashboardStats>({
 
 const recentMessages = ref<RecentMessage[]>([])
 const isLoading = ref(true)
+
+// Time range filter
+type TimeRangePreset = 'today' | '7days' | '30days' | 'this_month' | 'custom'
+
+// Load saved preferences from localStorage
+const loadSavedPreferences = () => {
+  const savedRange = localStorage.getItem('dashboard_time_range') as TimeRangePreset | null
+  const savedCustomRange = localStorage.getItem('dashboard_custom_range')
+
+  let customRange: DateRange = { start: undefined, end: undefined }
+  if (savedCustomRange) {
+    try {
+      const parsed = JSON.parse(savedCustomRange)
+      if (parsed.start && parsed.end) {
+        customRange = {
+          start: new CalendarDate(parsed.start.year, parsed.start.month, parsed.start.day),
+          end: new CalendarDate(parsed.end.year, parsed.end.month, parsed.end.day)
+        }
+      }
+    } catch (e) {
+      console.error('Failed to parse saved custom range:', e)
+    }
+  }
+
+  return {
+    range: savedRange || 'this_month',
+    customRange
+  }
+}
+
+const savedPrefs = loadSavedPreferences()
+const selectedRange = ref<TimeRangePreset>(savedPrefs.range as TimeRangePreset)
+const customDateRange = ref<DateRange>(savedPrefs.customRange)
+const isDatePickerOpen = ref(false)
+
+// Save preferences to localStorage
+const savePreferences = () => {
+  localStorage.setItem('dashboard_time_range', selectedRange.value)
+  if (selectedRange.value === 'custom' && customDateRange.value.start && customDateRange.value.end) {
+    localStorage.setItem('dashboard_custom_range', JSON.stringify({
+      start: {
+        year: customDateRange.value.start.year,
+        month: customDateRange.value.start.month,
+        day: customDateRange.value.start.day
+      },
+      end: {
+        year: customDateRange.value.end.year,
+        month: customDateRange.value.end.month,
+        day: customDateRange.value.end.day
+      }
+    }))
+  }
+}
+
+const timeRangeOptions = [
+  { value: 'today', label: 'Today' },
+  { value: '7days', label: 'Last 7 days' },
+  { value: '30days', label: 'Last 30 days' },
+  { value: 'this_month', label: 'This month' },
+  { value: 'custom', label: 'Custom range' }
+]
+
+// Format date as YYYY-MM-DD in local timezone (avoids UTC conversion issues)
+const formatDateLocal = (date: Date): string => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const getDateRange = computed(() => {
+  const now = new Date()
+  let from: Date
+  let to: Date = now
+
+  switch (selectedRange.value) {
+    case 'today':
+      from = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      break
+    case '7days':
+      from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7)
+      to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      break
+    case '30days':
+      from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30)
+      to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      break
+    case 'this_month':
+      from = new Date(now.getFullYear(), now.getMonth(), 1)
+      to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      break
+    case 'custom':
+      if (customDateRange.value.start && customDateRange.value.end) {
+        from = new Date(customDateRange.value.start.year, customDateRange.value.start.month - 1, customDateRange.value.start.day)
+        to = new Date(customDateRange.value.end.year, customDateRange.value.end.month - 1, customDateRange.value.end.day)
+      } else {
+        from = new Date(now.getFullYear(), now.getMonth(), 1)
+        to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      }
+      break
+    default:
+      from = new Date(now.getFullYear(), now.getMonth(), 1)
+      to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  }
+
+  return {
+    from: formatDateLocal(from),
+    to: formatDateLocal(to)
+  }
+})
+
+const comparisonPeriodLabel = computed(() => {
+  switch (selectedRange.value) {
+    case 'today':
+      return 'from yesterday'
+    case '7days':
+      return 'from previous 7 days'
+    case '30days':
+      return 'from previous 30 days'
+    case 'this_month':
+      return 'from last month'
+    case 'custom':
+      return 'from previous period'
+    default:
+      return 'from previous period'
+  }
+})
+
+const formatDateRange = computed(() => {
+  if (selectedRange.value === 'custom' && customDateRange.value.start && customDateRange.value.end) {
+    const start = customDateRange.value.start
+    const end = customDateRange.value.end
+    const startStr = `${start.month}/${start.day}/${start.year}`
+    const endStr = `${end.month}/${end.day}/${end.year}`
+    return `${startStr} - ${endStr}`
+  }
+  return ''
+})
 
 const statCards = [
   {
@@ -101,9 +253,11 @@ const formatTime = (dateStr: string): string => {
   return `${diffDays}d ago`
 }
 
-onMounted(async () => {
+const fetchDashboardData = async () => {
+  isLoading.value = true
   try {
-    const response = await analyticsService.dashboard()
+    const { from, to } = getDateRange.value
+    const response = await analyticsService.dashboard({ from, to })
     // API response is wrapped in { status: "success", data: { stats: {...}, recent_messages: [...] } }
     const data = response.data.data || response.data
     stats.value = data.stats || {
@@ -134,6 +288,26 @@ onMounted(async () => {
   } finally {
     isLoading.value = false
   }
+}
+
+const applyCustomRange = () => {
+  if (customDateRange.value.start && customDateRange.value.end) {
+    isDatePickerOpen.value = false
+    savePreferences()
+    fetchDashboardData()
+  }
+}
+
+// Watch for range changes (fetch data for preset ranges, custom range uses Apply button)
+watch(selectedRange, (newValue) => {
+  savePreferences()
+  if (newValue !== 'custom') {
+    fetchDashboardData()
+  }
+})
+
+onMounted(() => {
+  fetchDashboardData()
 })
 </script>
 
@@ -141,8 +315,42 @@ onMounted(async () => {
   <div class="flex flex-col h-full">
     <!-- Header -->
     <header class="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div class="flex h-16 items-center px-6">
+      <div class="flex h-16 items-center justify-between px-6">
         <h1 class="text-xl font-semibold">Dashboard</h1>
+
+        <!-- Time Range Filter -->
+        <div class="flex items-center gap-2">
+          <Select v-model="selectedRange">
+            <SelectTrigger class="w-[180px]">
+              <SelectValue placeholder="Select range" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="today">Today</SelectItem>
+              <SelectItem value="7days">Last 7 days</SelectItem>
+              <SelectItem value="30days">Last 30 days</SelectItem>
+              <SelectItem value="this_month">This month</SelectItem>
+              <SelectItem value="custom">Custom range</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <!-- Custom Range Popover -->
+          <Popover v-if="selectedRange === 'custom'" v-model:open="isDatePickerOpen">
+            <PopoverTrigger as-child>
+              <Button variant="outline" class="w-auto">
+                <CalendarIcon class="h-4 w-4 mr-2" />
+                {{ formatDateRange || 'Select dates' }}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent class="w-auto p-4" align="end">
+              <div class="space-y-4">
+                <RangeCalendar v-model="customDateRange" :number-of-months="2" />
+                <Button class="w-full" @click="applyCustomRange" :disabled="!customDateRange.start || !customDateRange.end">
+                  Apply Range
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
     </header>
 
@@ -188,7 +396,7 @@ onMounted(async () => {
                   <span :class="(stats[card.changeKey as keyof DashboardStats] as number) >= 0 ? 'text-green-500' : 'text-red-500'">
                     {{ Math.abs(stats[card.changeKey as keyof DashboardStats] as number).toFixed(1) }}%
                   </span>
-                  <span class="ml-1">from last month</span>
+                  <span class="ml-1">{{ comparisonPeriodLabel }}</span>
                 </div>
               </CardContent>
             </Card>

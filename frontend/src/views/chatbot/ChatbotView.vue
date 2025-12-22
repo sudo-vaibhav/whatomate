@@ -119,7 +119,7 @@ const statCards = [
             :disabled="isToggling"
           >
             <Power class="h-4 w-4 mr-2" />
-            {{ settings.enabled ? 'Disable' : 'Enable' }} Chatbot
+            {{ settings.enabled ? 'Disable' : 'Enable' }}
           </Button>
         </div>
       </div>

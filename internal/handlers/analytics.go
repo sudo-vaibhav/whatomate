@@ -38,82 +38,91 @@ func (a *App) GetDashboardStats(r *fastglue.Request) error {
 	}
 
 	now := time.Now()
-	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
-	startOfLastMonth := startOfMonth.AddDate(0, -1, 0)
 
-	// Get message counts
-	var totalMessages, lastMonthMessages int64
+	// Parse date range from query params
+	fromStr := string(r.RequestCtx.QueryArgs().Peek("from"))
+	toStr := string(r.RequestCtx.QueryArgs().Peek("to"))
+
+	var periodStart, periodEnd time.Time
+	if fromStr != "" && toStr != "" {
+		// Parse custom date range
+		periodStart, err = time.Parse("2006-01-02", fromStr)
+		if err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid 'from' date format. Use YYYY-MM-DD", nil, "")
+		}
+		periodEnd, err = time.Parse("2006-01-02", toStr)
+		if err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid 'to' date format. Use YYYY-MM-DD", nil, "")
+		}
+		// End of day for the to date
+		periodEnd = periodEnd.Add(24*time.Hour - time.Nanosecond)
+	} else {
+		// Default to current month
+		periodStart = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+		periodEnd = now
+	}
+
+	// Calculate the previous period for comparison (same duration, before the current period)
+	periodDuration := periodEnd.Sub(periodStart)
+	previousPeriodStart := periodStart.Add(-periodDuration - time.Nanosecond)
+	previousPeriodEnd := periodStart.Add(-time.Nanosecond)
+
+	// Get message counts for the selected period
+	var previousPeriodMessages, currentPeriodMessages int64
 	a.DB.Model(&models.Message{}).
-		Where("organization_id = ?", orgID).
-		Count(&totalMessages)
+		Where("organization_id = ? AND created_at >= ? AND created_at <= ?", orgID, previousPeriodStart, previousPeriodEnd).
+		Count(&previousPeriodMessages)
 
 	a.DB.Model(&models.Message{}).
-		Where("organization_id = ? AND created_at >= ? AND created_at < ?", orgID, startOfLastMonth, startOfMonth).
-		Count(&lastMonthMessages)
+		Where("organization_id = ? AND created_at >= ? AND created_at <= ?", orgID, periodStart, periodEnd).
+		Count(&currentPeriodMessages)
 
-	var currentMonthMessages int64
-	a.DB.Model(&models.Message{}).
-		Where("organization_id = ? AND created_at >= ?", orgID, startOfMonth).
-		Count(&currentMonthMessages)
+	messagesChange := calculatePercentageChange(previousPeriodMessages, currentPeriodMessages)
 
-	messagesChange := calculatePercentageChange(lastMonthMessages, currentMonthMessages)
-
-	// Get contact counts
-	var totalContacts, lastMonthContacts, currentMonthContacts int64
+	// Get contact counts for the selected period
+	var previousPeriodContacts, currentPeriodContacts int64
 	a.DB.Model(&models.Contact{}).
-		Where("organization_id = ?", orgID).
-		Count(&totalContacts)
+		Where("organization_id = ? AND created_at >= ? AND created_at <= ?", orgID, previousPeriodStart, previousPeriodEnd).
+		Count(&previousPeriodContacts)
 
 	a.DB.Model(&models.Contact{}).
-		Where("organization_id = ? AND created_at >= ? AND created_at < ?", orgID, startOfLastMonth, startOfMonth).
-		Count(&lastMonthContacts)
+		Where("organization_id = ? AND created_at >= ? AND created_at <= ?", orgID, periodStart, periodEnd).
+		Count(&currentPeriodContacts)
 
-	a.DB.Model(&models.Contact{}).
-		Where("organization_id = ? AND created_at >= ?", orgID, startOfMonth).
-		Count(&currentMonthContacts)
+	contactsChange := calculatePercentageChange(previousPeriodContacts, currentPeriodContacts)
 
-	contactsChange := calculatePercentageChange(lastMonthContacts, currentMonthContacts)
-
-	// Get chatbot session counts (from chatbot_sessions table if it exists)
-	var totalSessions, lastMonthSessions, currentMonthSessions int64
+	// Get chatbot session counts for the selected period
+	var previousPeriodSessions, currentPeriodSessions int64
 	a.DB.Model(&models.ChatbotSession{}).
-		Where("organization_id = ?", orgID).
-		Count(&totalSessions)
+		Where("organization_id = ? AND created_at >= ? AND created_at <= ?", orgID, previousPeriodStart, previousPeriodEnd).
+		Count(&previousPeriodSessions)
 
 	a.DB.Model(&models.ChatbotSession{}).
-		Where("organization_id = ? AND created_at >= ? AND created_at < ?", orgID, startOfLastMonth, startOfMonth).
-		Count(&lastMonthSessions)
+		Where("organization_id = ? AND created_at >= ? AND created_at <= ?", orgID, periodStart, periodEnd).
+		Count(&currentPeriodSessions)
 
-	a.DB.Model(&models.ChatbotSession{}).
-		Where("organization_id = ? AND created_at >= ?", orgID, startOfMonth).
-		Count(&currentMonthSessions)
+	sessionsChange := calculatePercentageChange(previousPeriodSessions, currentPeriodSessions)
 
-	sessionsChange := calculatePercentageChange(lastMonthSessions, currentMonthSessions)
-
-	// Get campaign counts (campaigns that have been processed)
-	var totalCampaigns, lastMonthCampaigns, currentMonthCampaigns int64
+	// Get campaign counts for the selected period
+	var previousPeriodCampaigns, currentPeriodCampaigns int64
 	a.DB.Model(&models.BulkMessageCampaign{}).
-		Where("organization_id = ? AND status IN ('completed', 'processing')", orgID).
-		Count(&totalCampaigns)
+		Where("organization_id = ? AND status IN ('completed', 'processing') AND created_at >= ? AND created_at <= ?", orgID, previousPeriodStart, previousPeriodEnd).
+		Count(&previousPeriodCampaigns)
 
 	a.DB.Model(&models.BulkMessageCampaign{}).
-		Where("organization_id = ? AND status IN ('completed', 'processing') AND created_at >= ? AND created_at < ?", orgID, startOfLastMonth, startOfMonth).
-		Count(&lastMonthCampaigns)
+		Where("organization_id = ? AND status IN ('completed', 'processing') AND created_at >= ? AND created_at <= ?", orgID, periodStart, periodEnd).
+		Count(&currentPeriodCampaigns)
 
-	a.DB.Model(&models.BulkMessageCampaign{}).
-		Where("organization_id = ? AND status IN ('completed', 'processing') AND created_at >= ?", orgID, startOfMonth).
-		Count(&currentMonthCampaigns)
-
-	campaignsChange := calculatePercentageChange(lastMonthCampaigns, currentMonthCampaigns)
+	campaignsChange := calculatePercentageChange(previousPeriodCampaigns, currentPeriodCampaigns)
 
 	stats := DashboardStats{
-		TotalMessages:   totalMessages,
+		TotalMessages:   currentPeriodMessages,
 		MessagesChange:  messagesChange,
-		TotalContacts:   totalContacts,
+		TotalContacts:   currentPeriodContacts,
 		ContactsChange:  contactsChange,
-		ChatbotSessions: totalSessions,
+		ChatbotSessions: currentPeriodSessions,
 		ChatbotChange:   sessionsChange,
-		CampaignsSent:   totalCampaigns,
+		CampaignsSent:   currentPeriodCampaigns,
 		CampaignsChange: campaignsChange,
 	}
 
