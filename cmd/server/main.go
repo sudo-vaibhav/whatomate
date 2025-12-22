@@ -203,19 +203,34 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger) {
 
 		// Manager+ routes: agents cannot access these
 		if role == "agent" {
-			managerRoutes := []string{
-				"/api/accounts",
-				"/api/templates",
-				"/api/flows",
-				"/api/campaigns",
-				"/api/chatbot",
-				"/api/analytics",
+			// Agent-accessible exceptions under restricted prefixes
+			agentAllowedPaths := []string{
+				"/api/chatbot/transfers",
 			}
-			for _, prefix := range managerRoutes {
-				if len(path) >= len(prefix) && path[:len(prefix)] == prefix {
-					r.RequestCtx.SetStatusCode(403)
-					r.RequestCtx.SetBodyString(`{"status":"error","message":"Access denied"}`)
-					return nil
+
+			isAllowed := false
+			for _, allowed := range agentAllowedPaths {
+				if len(path) >= len(allowed) && path[:len(allowed)] == allowed {
+					isAllowed = true
+					break
+				}
+			}
+
+			if !isAllowed {
+				managerRoutes := []string{
+					"/api/accounts",
+					"/api/templates",
+					"/api/flows",
+					"/api/campaigns",
+					"/api/chatbot",
+					"/api/analytics",
+				}
+				for _, prefix := range managerRoutes {
+					if len(path) >= len(prefix) && path[:len(prefix)] == prefix {
+						r.RequestCtx.SetStatusCode(403)
+						r.RequestCtx.SetBodyString(`{"status":"error","message":"Access denied"}`)
+						return nil
+					}
 				}
 			}
 
@@ -332,7 +347,9 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger) {
 	// Agent Transfers
 	g.GET("/api/chatbot/transfers", app.ListAgentTransfers)
 	g.POST("/api/chatbot/transfers", app.CreateAgentTransfer)
+	g.POST("/api/chatbot/transfers/pick", app.PickNextTransfer)
 	g.PUT("/api/chatbot/transfers/{id}/resume", app.ResumeFromTransfer)
+	g.PUT("/api/chatbot/transfers/{id}/assign", app.AssignAgentTransfer)
 
 	// Sessions (admin/debug)
 	g.GET("/api/chatbot/sessions", app.ListChatbotSessions)

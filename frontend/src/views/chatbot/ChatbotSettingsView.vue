@@ -56,6 +56,8 @@ const chatbotSettings = ref({
   business_hours: [...defaultBusinessHours] as BusinessHour[],
   out_of_hours_message: '',
   allow_automated_outside_hours: true,
+  allow_agent_queue_pickup: true,
+  assign_to_same_agent: true,
   transfer_message: ''
 })
 
@@ -137,6 +139,8 @@ onMounted(async () => {
         business_hours: mergedHours,
         out_of_hours_message: data.settings.out_of_hours_message || '',
         allow_automated_outside_hours: data.settings.allow_automated_outside_hours !== false,
+        allow_agent_queue_pickup: data.settings.allow_agent_queue_pickup !== false,
+        assign_to_same_agent: data.settings.assign_to_same_agent !== false,
         transfer_message: ''
       }
       const aiEnabledValue = data.settings.ai_enabled === true
@@ -175,7 +179,9 @@ async function saveChatbotSettings() {
       greeting_buttons: chatbotSettings.value.greeting_buttons.filter(btn => btn.title.trim()),
       fallback_message: chatbotSettings.value.fallback_message,
       fallback_buttons: chatbotSettings.value.fallback_buttons.filter(btn => btn.title.trim()),
-      session_timeout_minutes: chatbotSettings.value.session_timeout_minutes
+      session_timeout_minutes: chatbotSettings.value.session_timeout_minutes,
+      allow_agent_queue_pickup: chatbotSettings.value.allow_agent_queue_pickup,
+      assign_to_same_agent: chatbotSettings.value.assign_to_same_agent
     })
     toast.success('Chatbot settings saved')
   } catch (error) {
@@ -380,6 +386,30 @@ async function saveAISettings() {
                     type="number"
                     min="5"
                     max="120"
+                  />
+                </div>
+
+                <Separator />
+
+                <div class="flex items-center justify-between py-2">
+                  <div>
+                    <p class="font-medium text-sm">Allow Agents to Pick from Queue</p>
+                    <p class="text-xs text-muted-foreground">When enabled, agents can self-assign transfers from the queue</p>
+                  </div>
+                  <Switch
+                    :checked="chatbotSettings.allow_agent_queue_pickup"
+                    @update:checked="chatbotSettings.allow_agent_queue_pickup = $event"
+                  />
+                </div>
+
+                <div class="flex items-center justify-between py-2">
+                  <div>
+                    <p class="font-medium text-sm">Assign to Same Agent</p>
+                    <p class="text-xs text-muted-foreground">When enabled, transfers are auto-assigned to the contact's existing agent. When disabled, transfers always go to queue.</p>
+                  </div>
+                  <Switch
+                    :checked="chatbotSettings.assign_to_same_agent"
+                    @update:checked="chatbotSettings.assign_to_same_agent = $event"
                   />
                 </div>
 

@@ -43,17 +43,17 @@ type ChangePasswordRequest struct {
 	NewPassword     string `json:"new_password"`
 }
 
-// ListUsers returns all users for the organization (admin only)
+// ListUsers returns all users for the organization (admin and manager)
 func (a *App) ListUsers(r *fastglue.Request) error {
 	orgID, err := getOrganizationID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	// Check if user is admin
+	// Check if user is admin or manager
 	role, _ := r.RequestCtx.UserValue("role").(string)
-	if role != "admin" {
-		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Admin access required", nil, "")
+	if role != "admin" && role != "manager" {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Admin or manager access required", nil, "")
 	}
 
 	var users []models.User

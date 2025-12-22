@@ -16,6 +16,11 @@ const (
 	TypeSetContact    = "set_contact"
 	TypePing          = "ping"
 	TypePong          = "pong"
+
+	// Agent transfer types
+	TypeAgentTransfer       = "agent_transfer"
+	TypeAgentTransferResume = "agent_transfer_resume"
+	TypeAgentTransferAssign = "agent_transfer_assign"
 )
 
 // BroadcastMessage represents a message to be broadcast to clients

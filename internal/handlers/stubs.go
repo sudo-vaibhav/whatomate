@@ -91,19 +91,6 @@ func (a *App) MarkMessageRead(r *fastglue.Request) error {
 	return r.SendErrorEnvelope(fasthttp.StatusNotImplemented, "Not implemented yet", nil, "")
 }
 
-// Agent transfer handlers
-func (a *App) ListAgentTransfers(r *fastglue.Request) error {
-	return r.SendErrorEnvelope(fasthttp.StatusNotImplemented, "Not implemented yet", nil, "")
-}
-
-func (a *App) CreateAgentTransfer(r *fastglue.Request) error {
-	return r.SendErrorEnvelope(fasthttp.StatusNotImplemented, "Not implemented yet", nil, "")
-}
-
-func (a *App) ResumeFromTransfer(r *fastglue.Request) error {
-	return r.SendErrorEnvelope(fasthttp.StatusNotImplemented, "Not implemented yet", nil, "")
-}
-
 // Analytics handlers
 func (a *App) GetMessageAnalytics(r *fastglue.Request) error {
 	return r.SendErrorEnvelope(fasthttp.StatusNotImplemented, "Not implemented yet", nil, "")

@@ -1,4 +1,5 @@
 import { useContactsStore } from '@/stores/contacts'
+import { useTransfersStore } from '@/stores/transfers'
 import { useAuthStore } from '@/stores/auth'
 import { toast } from 'vue-sonner'
 import router from '@/router'
@@ -43,6 +44,11 @@ const WS_TYPE_STATUS_UPDATE = 'status_update'
 const WS_TYPE_SET_CONTACT = 'set_contact'
 const WS_TYPE_PING = 'ping'
 const WS_TYPE_PONG = 'pong'
+
+// Agent transfer types
+const WS_TYPE_AGENT_TRANSFER = 'agent_transfer'
+const WS_TYPE_AGENT_TRANSFER_RESUME = 'agent_transfer_resume'
+const WS_TYPE_AGENT_TRANSFER_ASSIGN = 'agent_transfer_assign'
 
 interface WSMessage {
   type: string
@@ -123,6 +129,15 @@ class WebSocketService {
         case WS_TYPE_STATUS_UPDATE:
           this.handleStatusUpdate(store, message.payload)
           break
+        case WS_TYPE_AGENT_TRANSFER:
+          this.handleAgentTransfer(message.payload)
+          break
+        case WS_TYPE_AGENT_TRANSFER_RESUME:
+          this.handleAgentTransferResume(message.payload)
+          break
+        case WS_TYPE_AGENT_TRANSFER_ASSIGN:
+          this.handleAgentTransferAssign(message.payload)
+          break
         case WS_TYPE_PONG:
           // Pong received, connection is alive
           break
@@ -138,6 +153,14 @@ class WebSocketService {
     // Check if this message is for the current contact
     const currentContact = store.currentContact
     const isViewingThisContact = currentContact && payload.contact_id === currentContact.id
+
+    console.log('WebSocket: handleNewMessage', {
+      payload_contact_id: payload.contact_id,
+      current_contact_id: currentContact?.id,
+      isViewingThisContact,
+      direction: payload.direction,
+      assigned_user_id: payload.assigned_user_id
+    })
 
     if (isViewingThisContact) {
       // Add message to the store
@@ -171,6 +194,13 @@ class WebSocketService {
       // Check if new message alerts are enabled (default to true if not set)
       const alertsEnabled = settings.new_message_alerts !== false
 
+      console.log('WebSocket: notification check', {
+        currentUserId,
+        assigned_user_id: payload.assigned_user_id,
+        isAssignedToUser,
+        alertsEnabled
+      })
+
       if (isAssignedToUser && alertsEnabled) {
         const senderName = payload.profile_name || 'Unknown'
         const messagePreview = payload.content?.body || 'New message'
@@ -191,6 +221,75 @@ class WebSocketService {
 
   private handleStatusUpdate(store: ReturnType<typeof useContactsStore>, payload: any) {
     store.updateMessageStatus(payload.message_id, payload.status)
+  }
+
+  private handleAgentTransfer(payload: any) {
+    console.log('WebSocket: handleAgentTransfer received', payload)
+    const transfersStore = useTransfersStore()
+    const authStore = useAuthStore()
+
+    // Add transfer to store
+    transfersStore.addTransfer({
+      id: payload.id,
+      contact_id: payload.contact_id,
+      contact_name: payload.contact_name || payload.phone_number,
+      phone_number: payload.phone_number,
+      whatsapp_account: payload.whatsapp_account,
+      status: payload.status,
+      source: payload.source || 'manual',
+      agent_id: payload.agent_id,
+      notes: payload.notes,
+      transferred_at: payload.transferred_at
+    })
+
+    // Show toast notification for admin/manager or assigned agent
+    const userRole = authStore.user?.role
+    const currentUserId = authStore.user?.id
+    const isAssignedToMe = payload.agent_id === currentUserId
+
+    if (userRole === 'admin' || userRole === 'manager' || isAssignedToMe) {
+      const contactName = payload.contact_name || payload.phone_number
+      toast.info('New Transfer', {
+        description: `${contactName} has been transferred to ${isAssignedToMe ? 'you' : 'agent queue'}`,
+        duration: 5000,
+        action: {
+          label: 'View',
+          onClick: () => router.push('/chatbot/transfers')
+        }
+      })
+    }
+  }
+
+  private handleAgentTransferResume(payload: any) {
+    const transfersStore = useTransfersStore()
+
+    transfersStore.updateTransfer(payload.id, {
+      status: payload.status,
+      resumed_at: payload.resumed_at,
+      resumed_by: payload.resumed_by
+    })
+  }
+
+  private handleAgentTransferAssign(payload: any) {
+    const transfersStore = useTransfersStore()
+    const authStore = useAuthStore()
+
+    transfersStore.updateTransfer(payload.id, {
+      agent_id: payload.agent_id
+    })
+
+    // Notify if assigned to current user
+    const currentUserId = authStore.user?.id
+    if (payload.agent_id === currentUserId) {
+      toast.info('Transfer Assigned', {
+        description: 'A transfer has been assigned to you',
+        duration: 5000,
+        action: {
+          label: 'View',
+          onClick: () => router.push('/chatbot/transfers')
+        }
+      })
+    }
   }
 
   private handleReconnect(token: string) {

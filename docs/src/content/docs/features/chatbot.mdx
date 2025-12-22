@@ -20,6 +20,7 @@ The Chatbot section in the sidebar provides access to all chatbot features:
 - **Keywords** - Create keyword-based auto-responses
 - **Flows** - Design multi-step conversation flows
 - **AI Contexts** - Configure AI knowledge bases
+- **Transfers** - View and manage agent transfer queue
 
 ## Chatbot Settings
 
@@ -198,3 +199,87 @@ The visual flow builder allows you to:
 | **Agent Transfer** | Transfer to human agent when needed |
 | **WhatsApp Flows** | Integrate native WhatsApp Flows |
 | **Drag & Drop Ordering** | Reorder steps by dragging them to new positions |
+
+## Agent Transfers
+
+Hand off conversations from the chatbot to human agents when needed.
+
+### How Transfers Work
+
+When a conversation is transferred:
+1. The chatbot stops processing messages for that contact
+2. All messages are visible to the assigned agent
+3. The agent can respond and manage the conversation
+4. When done, the agent can resume chatbot processing
+
+### Transfer Triggers
+
+Transfers can be initiated in three ways:
+
+<CardGrid>
+  <Card title="Manual Transfer" icon="forward">
+    Agents/managers can click "Transfer to Agent" from the chat view to manually transfer a conversation.
+  </Card>
+  <Card title="Conversation Flow" icon="workflow">
+    Add a transfer step in your conversation flow to hand off to agents at specific points.
+  </Card>
+  <Card title="Keyword Rule" icon="key">
+    Configure keywords like "talk to agent" or "human" to automatically trigger a transfer.
+  </Card>
+</CardGrid>
+
+### Queue Management
+
+#### For Agents
+
+Agents see the **Transfers** view in their sidebar with:
+- **My Transfers** - Conversations currently assigned to them
+- **Pick Next** button - Claim the next available transfer from the queue (if enabled)
+
+<Aside type="note">
+  When picking from the queue, agents don't see contact details until the transfer is assigned to them. This ensures fair FIFO (first-in-first-out) distribution.
+</Aside>
+
+#### For Admins/Managers
+
+Admins and managers have full visibility into the queue and can:
+- View all unassigned transfers with contact details
+- Assign transfers to specific agents
+- View transfer history
+- Resume transfers (return to chatbot)
+
+### Queue Settings
+
+Configure queue behavior in **Chatbot > Settings**:
+
+- **Allow Agents to Pick from Queue** - When enabled, agents can self-assign transfers by clicking "Pick Next". When disabled, only admins/managers can assign transfers.
+
+### Transfer Lifecycle
+
+<Steps>
+
+1. **Transfer Created**
+
+   A transfer is created via manual action, flow step, or keyword rule. The contact is assigned to the queue or an existing agent.
+
+2. **Agent Assignment**
+
+   Either the agent picks from the queue, or an admin assigns the transfer.
+
+3. **Agent Handling**
+
+   The agent communicates with the customer. The chatbot is paused for this contact.
+
+4. **Resume Chatbot**
+
+   When the conversation is complete, the agent clicks "Resume" to return the contact to chatbot processing.
+
+</Steps>
+
+### Auto-Assignment
+
+If a contact already has an assigned agent (from a previous conversation), new transfers for that contact are automatically assigned to the same agent.
+
+<Aside type="tip">
+  Use transfers strategically to handle complex inquiries that require human judgment while letting the chatbot manage routine questions.
+</Aside>

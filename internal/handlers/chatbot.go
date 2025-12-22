@@ -23,6 +23,8 @@ type ChatbotSettingsResponse struct {
 	BusinessHours              []map[string]interface{} `json:"business_hours"`
 	OutOfHoursMessage          string                   `json:"out_of_hours_message"`
 	AllowAutomatedOutsideHours bool                     `json:"allow_automated_outside_hours"`
+	AllowAgentQueuePickup      bool                     `json:"allow_agent_queue_pickup"`
+	AssignToSameAgent          bool                     `json:"assign_to_same_agent"`
 	AIEnabled                  bool                     `json:"ai_enabled"`
 	AIProvider            string                   `json:"ai_provider"`
 	AIModel               string                   `json:"ai_model"`
@@ -141,6 +143,8 @@ func (a *App) GetChatbotSettings(r *fastglue.Request) error {
 		BusinessHours:              businessHours,
 		OutOfHoursMessage:          settings.OutOfHoursMessage,
 		AllowAutomatedOutsideHours: settings.AllowAutomatedOutsideHours,
+		AllowAgentQueuePickup:      settings.AllowAgentQueuePickup,
+		AssignToSameAgent:          settings.AssignToSameAgent,
 		AIEnabled:                  settings.AIEnabled,
 		AIProvider:            settings.AIProvider,
 		AIModel:               settings.AIModel,
@@ -172,6 +176,8 @@ func (a *App) UpdateChatbotSettings(r *fastglue.Request) error {
 		BusinessHours              *[]map[string]interface{}  `json:"business_hours"`
 		OutOfHoursMessage          *string                    `json:"out_of_hours_message"`
 		AllowAutomatedOutsideHours *bool                      `json:"allow_automated_outside_hours"`
+		AllowAgentQueuePickup      *bool                      `json:"allow_agent_queue_pickup"`
+		AssignToSameAgent          *bool                      `json:"assign_to_same_agent"`
 		AIEnabled                  *bool                      `json:"ai_enabled"`
 		AIProvider                 *string                    `json:"ai_provider"`
 		AIAPIKey                   *string                    `json:"ai_api_key"`
@@ -237,6 +243,12 @@ func (a *App) UpdateChatbotSettings(r *fastglue.Request) error {
 	}
 	if req.AllowAutomatedOutsideHours != nil {
 		settings.AllowAutomatedOutsideHours = *req.AllowAutomatedOutsideHours
+	}
+	if req.AllowAgentQueuePickup != nil {
+		settings.AllowAgentQueuePickup = *req.AllowAgentQueuePickup
+	}
+	if req.AssignToSameAgent != nil {
+		settings.AssignToSameAgent = *req.AssignToSameAgent
 	}
 	if req.AIEnabled != nil {
 		settings.AIEnabled = *req.AIEnabled

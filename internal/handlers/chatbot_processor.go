@@ -83,6 +83,14 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 	// Save incoming message to messages table (always, even if chatbot is disabled)
 	a.saveIncomingMessage(&account, contact, msg.ID, messageType, messageText)
 
+	// Check for active agent transfer - skip chatbot processing if transferred
+	if a.hasActiveAgentTransfer(account.OrganizationID, contact.ID) {
+		a.Log.Info("Contact has active agent transfer, skipping chatbot processing",
+			"contact_id", contact.ID,
+			"phone_number", contact.PhoneNumber)
+		return
+	}
+
 	// Check if chatbot is enabled for this account
 	var settings models.ChatbotSettings
 	result := a.DB.Where("organization_id = ? AND (whats_app_account = ? OR whats_app_account = '')",
@@ -130,6 +138,19 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 	// Log incoming message to session
 	a.logSessionMessage(session.ID, "incoming", messageText, "keyword_check")
 
+	// Check for transfer keyword BEFORE sending greeting (transfer takes priority)
+	keywordResponse, keywordMatched := a.matchKeywordRules(account.OrganizationID, account.Name, messageText)
+	if keywordMatched && keywordResponse.ResponseType == "transfer" {
+		a.Log.Info("Transfer keyword matched, skipping greeting", "response", keywordResponse.Body)
+		// Send transfer message if provided
+		if keywordResponse.Body != "" {
+			a.sendAndSaveTextMessage(&account, contact, keywordResponse.Body)
+		}
+		// Create agent transfer
+		a.createTransferFromKeyword(&account, contact)
+		return
+	}
+
 	// Send greeting message for new sessions (first message or session timeout)
 	if isNewSession && settings.DefaultResponse != "" {
 		a.Log.Info("New session - sending greeting message", "contact", contact.PhoneNumber)
@@ -164,10 +185,11 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 		return
 	}
 
-	// Try to match keyword rules
-	keywordResponse, matched := a.matchKeywordRules(account.OrganizationID, account.Name, messageText)
-	if matched {
-		a.Log.Info("Keyword rule matched", "response", keywordResponse.Body, "has_buttons", len(keywordResponse.Buttons) > 0)
+	// Handle non-transfer keyword matches (transfer was already handled above)
+	if keywordMatched && keywordResponse.ResponseType != "transfer" {
+		a.Log.Info("Keyword rule matched", "response_type", keywordResponse.ResponseType, "response", keywordResponse.Body)
+
+		// Handle regular text response
 		if len(keywordResponse.Buttons) > 0 {
 			a.sendAndSaveInteractiveButtons(&account, contact, keywordResponse.Body, keywordResponse.Buttons)
 		} else {
@@ -224,8 +246,9 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 
 // KeywordResponse holds the response content and optional buttons
 type KeywordResponse struct {
-	Body    string
-	Buttons []map[string]interface{}
+	Body         string
+	Buttons      []map[string]interface{}
+	ResponseType string // text, transfer
 }
 
 // matchKeywordRules checks if the message matches any keyword rules
@@ -285,7 +308,17 @@ func (a *App) matchKeywordRules(orgID uuid.UUID, accountName, messageText string
 			}
 
 			if matched {
-				response := &KeywordResponse{}
+				response := &KeywordResponse{
+					ResponseType: rule.ResponseType,
+				}
+
+				// For transfer type, use body as the transfer message
+				if rule.ResponseType == "transfer" {
+					if body, ok := rule.ResponseContent["body"].(string); ok {
+						response.Body = body
+					}
+					return response, true
+				}
 
 				// Get response body
 				if body, ok := rule.ResponseContent["body"].(string); ok {
@@ -359,20 +392,24 @@ func (a *App) sendAndSaveTextMessage(account *models.WhatsAppAccount, contact *m
 
 	// Broadcast via WebSocket
 	if a.WSHub != nil {
+		var assignedUserIDStr string
+		if contact.AssignedUserID != nil {
+			assignedUserIDStr = contact.AssignedUserID.String()
+		}
 		a.WSHub.BroadcastToOrg(account.OrganizationID, websocket.WSMessage{
 			Type: websocket.TypeNewMessage,
 			Payload: map[string]any{
-				"id":              msg.ID,
-				"contact_id":      contact.ID,
-				"assigned_user_id": contact.AssignedUserID,
-				"profile_name":    contact.ProfileName,
-				"direction":       msg.Direction,
-				"message_type":    msg.MessageType,
-				"content":         map[string]string{"body": msg.Content},
-				"status":          msg.Status,
-				"wamid":           msg.WhatsAppMessageID,
-				"created_at":      msg.CreatedAt,
-				"updated_at":      msg.UpdatedAt,
+				"id":               msg.ID,
+				"contact_id":       contact.ID.String(),
+				"assigned_user_id": assignedUserIDStr,
+				"profile_name":     contact.ProfileName,
+				"direction":        msg.Direction,
+				"message_type":     msg.MessageType,
+				"content":          map[string]string{"body": msg.Content},
+				"status":           msg.Status,
+				"wamid":            msg.WhatsAppMessageID,
+				"created_at":       msg.CreatedAt,
+				"updated_at":       msg.UpdatedAt,
 			},
 		})
 	}
@@ -405,20 +442,24 @@ func (a *App) sendAndSaveInteractiveButtons(account *models.WhatsAppAccount, con
 
 	// Broadcast via WebSocket
 	if a.WSHub != nil {
+		var assignedUserIDStr string
+		if contact.AssignedUserID != nil {
+			assignedUserIDStr = contact.AssignedUserID.String()
+		}
 		a.WSHub.BroadcastToOrg(account.OrganizationID, websocket.WSMessage{
 			Type: websocket.TypeNewMessage,
 			Payload: map[string]any{
-				"id":              msg.ID,
-				"contact_id":      contact.ID,
-				"assigned_user_id": contact.AssignedUserID,
-				"profile_name":    contact.ProfileName,
-				"direction":       msg.Direction,
-				"message_type":    msg.MessageType,
-				"content":         map[string]string{"body": msg.Content},
-				"status":          msg.Status,
-				"wamid":           msg.WhatsAppMessageID,
-				"created_at":      msg.CreatedAt,
-				"updated_at":      msg.UpdatedAt,
+				"id":               msg.ID,
+				"contact_id":       contact.ID.String(),
+				"assigned_user_id": assignedUserIDStr,
+				"profile_name":     contact.ProfileName,
+				"direction":        msg.Direction,
+				"message_type":     msg.MessageType,
+				"content":          map[string]string{"body": msg.Content},
+				"status":           msg.Status,
+				"wamid":            msg.WhatsAppMessageID,
+				"created_at":       msg.CreatedAt,
+				"updated_at":       msg.UpdatedAt,
 			},
 		})
 	}
@@ -1637,20 +1678,24 @@ func (a *App) saveIncomingMessage(account *models.WhatsAppAccount, contact *mode
 
 	// Broadcast new message via WebSocket
 	if a.WSHub != nil {
+		var assignedUserIDStr string
+		if contact.AssignedUserID != nil {
+			assignedUserIDStr = contact.AssignedUserID.String()
+		}
 		a.WSHub.BroadcastToOrg(account.OrganizationID, websocket.WSMessage{
 			Type: websocket.TypeNewMessage,
 			Payload: map[string]any{
-				"id":              message.ID,
-				"contact_id":      contact.ID,
-				"assigned_user_id": contact.AssignedUserID,
-				"profile_name":    contact.ProfileName,
-				"direction":       message.Direction,
-				"message_type":    message.MessageType,
-				"content":         map[string]string{"body": message.Content},
-				"status":          message.Status,
-				"wamid":           message.WhatsAppMessageID,
-				"created_at":      message.CreatedAt,
-				"updated_at":      message.UpdatedAt,
+				"id":               message.ID,
+				"contact_id":       contact.ID.String(),
+				"assigned_user_id": assignedUserIDStr,
+				"profile_name":     contact.ProfileName,
+				"direction":        message.Direction,
+				"message_type":     message.MessageType,
+				"content":          map[string]string{"body": message.Content},
+				"status":           message.Status,
+				"wamid":            message.WhatsAppMessageID,
+				"created_at":       message.CreatedAt,
+				"updated_at":       message.UpdatedAt,
 			},
 		})
 	}

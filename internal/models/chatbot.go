@@ -21,6 +21,8 @@ type ChatbotSettings struct {
 	BusinessHours              JSONBArray `gorm:"type:jsonb;default:'[]'" json:"business_hours"` // [{day, enabled, start_time, end_time}]
 	OutOfHoursMessage          string     `gorm:"type:text" json:"out_of_hours_message"`
 	AllowAutomatedOutsideHours bool       `gorm:"default:true" json:"allow_automated_outside_hours"` // Allow flows/keywords/AI outside business hours
+	AllowAgentQueuePickup      bool       `gorm:"default:true" json:"allow_agent_queue_pickup"`      // Allow agents to pick transfers from queue
+	AssignToSameAgent          bool       `gorm:"default:true" json:"assign_to_same_agent"`          // Auto-assign transfers to contact's existing agent
 	AIEnabled            bool        `gorm:"column:ai_enabled;default:false" json:"ai_enabled"`
 	AIProvider           string      `gorm:"column:ai_provider;size:20" json:"ai_provider"` // openai, anthropic, google
 	AIAPIKey             string      `gorm:"column:ai_api_key;type:text" json:"-"`         // encrypted
@@ -198,6 +200,7 @@ type AgentTransfer struct {
 	WhatsAppAccount string     `gorm:"size:100;index;not null" json:"whatsapp_account"` // References WhatsAppAccount.Name
 	PhoneNumber     string     `gorm:"size:20;not null" json:"phone_number"`
 	Status          string     `gorm:"size:20;default:'active'" json:"status"` // active, resumed
+	Source          string     `gorm:"size:20;default:'manual'" json:"source"` // manual, flow, keyword
 	AgentID         *uuid.UUID `gorm:"type:uuid" json:"agent_id,omitempty"`
 	Notes           string     `gorm:"type:text" json:"notes"`
 	TransferredAt   time.Time  `gorm:"autoCreateTime" json:"transferred_at"`

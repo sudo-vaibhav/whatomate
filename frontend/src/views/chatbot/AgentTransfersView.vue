@@ -1,0 +1,642 @@
+<script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb'
+import { chatbotService, usersService } from '@/services/api'
+import { useTransfersStore, type AgentTransfer } from '@/stores/transfers'
+import { useAuthStore } from '@/stores/auth'
+import { toast } from 'vue-sonner'
+import { useRouter } from 'vue-router'
+import {
+  UserX,
+  ArrowLeft,
+  Play,
+  MessageSquare,
+  User,
+  Clock,
+  Loader2,
+  Users,
+  UserPlus
+} from 'lucide-vue-next'
+
+const router = useRouter()
+const transfersStore = useTransfersStore()
+const authStore = useAuthStore()
+
+const isLoading = ref(true)
+const isPicking = ref(false)
+const isAssigning = ref(false)
+const isResuming = ref(false)
+const activeTab = ref('my-transfers')
+const assignDialogOpen = ref(false)
+const transferToAssign = ref<AgentTransfer | null>(null)
+const selectedAgentId = ref<string>('')
+const agents = ref<{ id: string; full_name: string }[]>([])
+
+const userRole = computed(() => authStore.user?.role)
+const isAdminOrManager = computed(() => userRole.value === 'admin' || userRole.value === 'manager')
+const currentUserId = computed(() => authStore.user?.id)
+
+const myTransfers = computed(() =>
+  transfersStore.transfers.filter(t =>
+    t.status === 'active' && t.agent_id === currentUserId.value
+  )
+)
+
+const queueTransfers = computed(() =>
+  transfersStore.transfers.filter(t =>
+    t.status === 'active' && !t.agent_id
+  )
+)
+
+const allActiveTransfers = computed(() =>
+  transfersStore.transfers.filter(t => t.status === 'active')
+)
+
+const resumedTransfers = computed(() =>
+  transfersStore.transfers.filter(t => t.status === 'resumed')
+)
+
+// Auto-refresh interval for real-time updates
+let refreshInterval: number | null = null
+
+onMounted(async () => {
+  console.log('AgentTransfersView mounted, user role:', userRole.value, 'isAdminOrManager:', isAdminOrManager.value)
+  await fetchTransfers()
+  // Always try to fetch agents for admin/manager - the API will reject if unauthorized
+  if (isAdminOrManager.value) {
+    await fetchAgents()
+  } else {
+    console.log('Not admin or manager, skipping fetchAgents')
+  }
+
+  // Set up periodic refresh every 10 seconds to catch any missed WebSocket updates
+  refreshInterval = window.setInterval(() => {
+    transfersStore.fetchTransfers()
+  }, 10000)
+})
+
+onUnmounted(() => {
+  if (refreshInterval) {
+    clearInterval(refreshInterval)
+    refreshInterval = null
+  }
+})
+
+// Watch for changes in the store's transfers array
+watch(
+  () => transfersStore.transfers,
+  (newTransfers) => {
+    console.log('Transfers updated:', newTransfers.length, 'Queue:', queueTransfers.value.length)
+  },
+  { deep: true }
+)
+
+async function fetchTransfers() {
+  isLoading.value = true
+  try {
+    await transfersStore.fetchTransfers()
+  } finally {
+    isLoading.value = false
+  }
+}
+
+async function fetchAgents() {
+  try {
+    const response = await usersService.list()
+    console.log('Users API response:', response.data)
+    const data = response.data.data || response.data
+    console.log('Parsed data:', data)
+    const usersList = data.users || data || []
+    console.log('Users list:', usersList)
+    agents.value = usersList.filter((u: any) => u.is_active !== false).map((u: any) => ({
+      id: u.id,
+      full_name: u.full_name
+    }))
+    console.log('Agents after mapping:', agents.value)
+  } catch (error: any) {
+    console.error('Failed to fetch agents:', error)
+    toast.error('Failed to load agents list')
+  }
+}
+
+async function pickNextTransfer() {
+  isPicking.value = true
+  try {
+    const response = await chatbotService.pickNextTransfer()
+    const data = response.data.data || response.data
+
+    if (data.transfer) {
+      toast.success('Transfer picked', {
+        description: `You are now assigned to ${data.transfer.contact_name || data.transfer.phone_number}`
+      })
+      await fetchTransfers()
+
+      // Navigate to chat
+      router.push(`/chat/${data.transfer.contact_id}`)
+    } else {
+      toast.info('No transfers in queue')
+    }
+  } catch (error: any) {
+    toast.error(error.response?.data?.message || 'Failed to pick transfer')
+  } finally {
+    isPicking.value = false
+  }
+}
+
+async function resumeTransfer(transfer: AgentTransfer) {
+  isResuming.value = true
+  try {
+    await chatbotService.resumeTransfer(transfer.id)
+    toast.success('Transfer resumed', {
+      description: 'Chatbot is now active for this contact'
+    })
+    await fetchTransfers()
+  } catch (error: any) {
+    toast.error(error.response?.data?.message || 'Failed to resume transfer')
+  } finally {
+    isResuming.value = false
+  }
+}
+
+async function openAssignDialog(transfer: AgentTransfer) {
+  transferToAssign.value = transfer
+  selectedAgentId.value = transfer.agent_id || 'unassigned'
+  assignDialogOpen.value = true
+
+  // Fetch agents if not already loaded
+  if (agents.value.length === 0) {
+    await fetchAgents()
+  }
+}
+
+async function assignTransfer() {
+  if (!transferToAssign.value) return
+
+  isAssigning.value = true
+  try {
+    // Map "unassigned" to null for the API
+    const agentId = selectedAgentId.value === 'unassigned' ? null : selectedAgentId.value
+    await chatbotService.assignTransfer(
+      transferToAssign.value.id,
+      agentId
+    )
+    toast.success('Transfer assigned')
+    assignDialogOpen.value = false
+    await fetchTransfers()
+  } catch (error: any) {
+    toast.error(error.response?.data?.message || 'Failed to assign transfer')
+  } finally {
+    isAssigning.value = false
+  }
+}
+
+function viewChat(transfer: AgentTransfer) {
+  router.push(`/chat/${transfer.contact_id}`)
+}
+
+function formatDate(dateStr: string) {
+  return new Date(dateStr).toLocaleString()
+}
+
+function getSourceBadge(source: string) {
+  switch (source) {
+    case 'flow':
+      return { label: 'Flow', variant: 'secondary' as const }
+    case 'keyword':
+      return { label: 'Keyword', variant: 'outline' as const }
+    default:
+      return { label: 'Manual', variant: 'default' as const }
+  }
+}
+</script>
+
+<template>
+  <div class="flex flex-col h-full">
+    <!-- Header -->
+    <header class="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div class="flex h-16 items-center px-6">
+        <Button variant="ghost" size="icon" class="mr-3" @click="router.push('/chatbot')">
+          <ArrowLeft class="h-5 w-5" />
+        </Button>
+        <UserX class="h-5 w-5 mr-3" />
+        <div class="flex-1">
+          <h1 class="text-xl font-semibold">Agent Transfers</h1>
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink href="/chatbot">Chatbot</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>Transfers</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        </div>
+
+        <!-- Queue pickup for agents -->
+        <div v-if="!isAdminOrManager" class="flex items-center gap-4">
+          <div class="text-sm text-muted-foreground">
+            <Users class="h-4 w-4 inline mr-1" />
+            {{ transfersStore.queueCount }} waiting in queue
+          </div>
+          <Button @click="pickNextTransfer" :disabled="isPicking || transfersStore.queueCount === 0">
+            <Loader2 v-if="isPicking" class="mr-2 h-4 w-4 animate-spin" />
+            <Play v-else class="mr-2 h-4 w-4" />
+            Pick Next
+          </Button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Content -->
+    <ScrollArea class="flex-1">
+      <div class="p-6 space-y-6">
+        <!-- Loading skeleton -->
+        <div v-if="isLoading" class="space-y-4">
+          <Skeleton class="h-12 w-full" />
+          <Skeleton class="h-64 w-full" />
+        </div>
+
+        <!-- Agent View (no tabs, just their transfers) -->
+        <div v-else-if="!isAdminOrManager">
+          <Card>
+            <CardHeader>
+              <CardTitle>My Transfers</CardTitle>
+              <CardDescription>Contacts transferred to you for human support</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div v-if="myTransfers.length === 0" class="text-center py-8 text-muted-foreground">
+                <UserX class="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No active transfers assigned to you</p>
+                <p class="text-sm mt-2">Click "Pick Next" to get a transfer from the queue</p>
+              </div>
+
+              <Table v-else>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Contact</TableHead>
+                    <TableHead>Phone</TableHead>
+                    <TableHead>Transferred At</TableHead>
+                    <TableHead>Source</TableHead>
+                    <TableHead class="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow v-for="transfer in myTransfers" :key="transfer.id">
+                    <TableCell class="font-medium">{{ transfer.contact_name }}</TableCell>
+                    <TableCell>{{ transfer.phone_number }}</TableCell>
+                    <TableCell>{{ formatDate(transfer.transferred_at) }}</TableCell>
+                    <TableCell>
+                      <Badge :variant="getSourceBadge(transfer.source).variant">
+                        {{ getSourceBadge(transfer.source).label }}
+                      </Badge>
+                    </TableCell>
+                    <TableCell class="text-right space-x-2">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button size="sm" variant="outline" @click="viewChat(transfer)">
+                            <MessageSquare class="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>View Chat</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            @click="resumeTransfer(transfer)"
+                            :disabled="isResuming"
+                          >
+                            <Play class="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Resume Chatbot</TooltipContent>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+
+        <!-- Admin/Manager View (with tabs) -->
+        <div v-else>
+          <Tabs v-model="activeTab" class="w-full">
+            <TabsList class="mb-6">
+              <TabsTrigger value="my-transfers">
+                My Transfers
+                <Badge v-if="myTransfers.length > 0" class="ml-2" variant="secondary">
+                  {{ myTransfers.length }}
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="queue">
+                Queue
+                <Badge v-if="queueTransfers.length > 0" class="ml-2" variant="destructive">
+                  {{ queueTransfers.length }}
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="all">All Active</TabsTrigger>
+              <TabsTrigger value="history">History</TabsTrigger>
+            </TabsList>
+
+            <!-- My Transfers Tab -->
+            <TabsContent value="my-transfers">
+              <Card>
+                <CardHeader>
+                  <CardTitle>My Transfers</CardTitle>
+                  <CardDescription>Transfers assigned to you</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div v-if="myTransfers.length === 0" class="text-center py-8 text-muted-foreground">
+                    <UserX class="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No active transfers assigned to you</p>
+                  </div>
+
+                  <Table v-else>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Contact</TableHead>
+                        <TableHead>Phone</TableHead>
+                        <TableHead>Transferred At</TableHead>
+                        <TableHead>Source</TableHead>
+                        <TableHead>Notes</TableHead>
+                        <TableHead class="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TableRow v-for="transfer in myTransfers" :key="transfer.id">
+                        <TableCell class="font-medium">{{ transfer.contact_name }}</TableCell>
+                        <TableCell>{{ transfer.phone_number }}</TableCell>
+                        <TableCell>{{ formatDate(transfer.transferred_at) }}</TableCell>
+                        <TableCell>
+                          <Badge :variant="getSourceBadge(transfer.source).variant">
+                            {{ getSourceBadge(transfer.source).label }}
+                          </Badge>
+                        </TableCell>
+                        <TableCell class="max-w-[200px] truncate">{{ transfer.notes || '-' }}</TableCell>
+                        <TableCell class="text-right space-x-2">
+                          <Button size="sm" variant="outline" @click="viewChat(transfer)">
+                            <MessageSquare class="h-4 w-4 mr-1" />
+                            Chat
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            @click="resumeTransfer(transfer)"
+                            :disabled="isResuming"
+                          >
+                            <Play class="h-4 w-4 mr-1" />
+                            Resume
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <!-- Queue Tab -->
+            <TabsContent value="queue">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Transfer Queue</CardTitle>
+                  <CardDescription>Unassigned transfers waiting for pickup (FIFO)</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div v-if="queueTransfers.length === 0" class="text-center py-8 text-muted-foreground">
+                    <Clock class="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No transfers in queue</p>
+                  </div>
+
+                  <Table v-else>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Contact</TableHead>
+                        <TableHead>Phone</TableHead>
+                        <TableHead>Transferred At</TableHead>
+                        <TableHead>Source</TableHead>
+                        <TableHead>Notes</TableHead>
+                        <TableHead class="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TableRow v-for="transfer in queueTransfers" :key="transfer.id">
+                        <TableCell class="font-medium">{{ transfer.contact_name }}</TableCell>
+                        <TableCell>{{ transfer.phone_number }}</TableCell>
+                        <TableCell>{{ formatDate(transfer.transferred_at) }}</TableCell>
+                        <TableCell>
+                          <Badge :variant="getSourceBadge(transfer.source).variant">
+                            {{ getSourceBadge(transfer.source).label }}
+                          </Badge>
+                        </TableCell>
+                        <TableCell class="max-w-[200px] truncate">{{ transfer.notes || '-' }}</TableCell>
+                        <TableCell class="text-right space-x-2">
+                          <Button size="sm" variant="outline" @click="openAssignDialog(transfer)">
+                            <UserPlus class="h-4 w-4 mr-1" />
+                            Assign
+                          </Button>
+                          <Button size="sm" variant="outline" @click="viewChat(transfer)">
+                            <MessageSquare class="h-4 w-4 mr-1" />
+                            Chat
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <!-- All Active Tab -->
+            <TabsContent value="all">
+              <Card>
+                <CardHeader>
+                  <CardTitle>All Active Transfers</CardTitle>
+                  <CardDescription>All currently active transfers</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div v-if="allActiveTransfers.length === 0" class="text-center py-8 text-muted-foreground">
+                    <UserX class="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No active transfers</p>
+                  </div>
+
+                  <Table v-else>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Contact</TableHead>
+                        <TableHead>Phone</TableHead>
+                        <TableHead>Assigned To</TableHead>
+                        <TableHead>Transferred At</TableHead>
+                        <TableHead>Source</TableHead>
+                        <TableHead class="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TableRow v-for="transfer in allActiveTransfers" :key="transfer.id">
+                        <TableCell class="font-medium">{{ transfer.contact_name }}</TableCell>
+                        <TableCell>{{ transfer.phone_number }}</TableCell>
+                        <TableCell>
+                          <Badge v-if="transfer.agent_name" variant="outline">
+                            <User class="h-3 w-3 mr-1" />
+                            {{ transfer.agent_name }}
+                          </Badge>
+                          <Badge v-else variant="destructive">Unassigned</Badge>
+                        </TableCell>
+                        <TableCell>{{ formatDate(transfer.transferred_at) }}</TableCell>
+                        <TableCell>
+                          <Badge :variant="getSourceBadge(transfer.source).variant">
+                            {{ getSourceBadge(transfer.source).label }}
+                          </Badge>
+                        </TableCell>
+                        <TableCell class="text-right space-x-2">
+                          <Button size="sm" variant="outline" @click="openAssignDialog(transfer)">
+                            <UserPlus class="h-4 w-4" />
+                          </Button>
+                          <Button size="sm" variant="outline" @click="viewChat(transfer)">
+                            <MessageSquare class="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            @click="resumeTransfer(transfer)"
+                            :disabled="isResuming"
+                          >
+                            <Play class="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <!-- History Tab -->
+            <TabsContent value="history">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Transfer History</CardTitle>
+                  <CardDescription>Resumed transfers</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div v-if="resumedTransfers.length === 0" class="text-center py-8 text-muted-foreground">
+                    <Clock class="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No transfer history</p>
+                  </div>
+
+                  <Table v-else>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Contact</TableHead>
+                        <TableHead>Phone</TableHead>
+                        <TableHead>Handled By</TableHead>
+                        <TableHead>Transferred At</TableHead>
+                        <TableHead>Resumed At</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TableRow v-for="transfer in resumedTransfers" :key="transfer.id">
+                        <TableCell class="font-medium">{{ transfer.contact_name }}</TableCell>
+                        <TableCell>{{ transfer.phone_number }}</TableCell>
+                        <TableCell>{{ transfer.agent_name || '-' }}</TableCell>
+                        <TableCell>{{ formatDate(transfer.transferred_at) }}</TableCell>
+                        <TableCell>{{ transfer.resumed_at ? formatDate(transfer.resumed_at) : '-' }}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </div>
+    </ScrollArea>
+
+    <!-- Assign Dialog -->
+    <Dialog v-model:open="assignDialogOpen">
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Assign Transfer</DialogTitle>
+          <DialogDescription>
+            Assign this transfer to an agent
+          </DialogDescription>
+        </DialogHeader>
+
+        <div class="space-y-4 py-4">
+          <div v-if="transferToAssign" class="text-sm">
+            <p><strong>Contact:</strong> {{ transferToAssign.contact_name }}</p>
+            <p><strong>Phone:</strong> {{ transferToAssign.phone_number }}</p>
+          </div>
+
+          <div class="space-y-2">
+            <label class="text-sm font-medium">Assign to Agent</label>
+            <Select v-model="selectedAgentId">
+              <SelectTrigger>
+                <SelectValue placeholder="Select an agent" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unassigned">Unassigned (back to queue)</SelectItem>
+                <SelectItem v-for="agent in agents" :key="agent.id" :value="agent.id">
+                  {{ agent.full_name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" @click="assignDialogOpen = false">Cancel</Button>
+          <Button @click="assignTransfer" :disabled="isAssigning">
+            <Loader2 v-if="isAssigning" class="mr-2 h-4 w-4 animate-spin" />
+            Assign
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </div>
+</template>

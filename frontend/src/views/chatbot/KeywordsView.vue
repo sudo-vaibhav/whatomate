@@ -61,7 +61,7 @@ interface KeywordRule {
   id: string
   keywords: string[]
   match_type: 'exact' | 'contains' | 'regex'
-  response_type: 'text' | 'template' | 'flow'
+  response_type: 'text' | 'template' | 'flow' | 'transfer'
   response_content: any
   priority: number
   enabled: boolean
@@ -147,8 +147,14 @@ function openEditDialog(rule: KeywordRule) {
 }
 
 async function saveRule() {
-  if (!formData.value.keywords.trim() || !formData.value.response_content.trim()) {
-    toast.error('Please fill in all required fields')
+  if (!formData.value.keywords.trim()) {
+    toast.error('Please enter at least one keyword')
+    return
+  }
+
+  // Response content is required for text, optional for transfer
+  if (formData.value.response_type !== 'transfer' && !formData.value.response_content.trim()) {
+    toast.error('Please enter a response message')
     return
   }
 
@@ -276,17 +282,34 @@ $: filteredRules.value = searchQuery.value
                 </Select>
               </div>
               <div class="space-y-2">
-                <Label for="response">Response Message</Label>
+                <Label for="response_type">Response Type</Label>
+                <Select v-model="formData.response_type">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select response type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="text">Text Response</SelectItem>
+                    <SelectItem value="transfer">Transfer to Agent</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div class="space-y-2">
+                <Label for="response">
+                  {{ formData.response_type === 'transfer' ? 'Transfer Message (optional)' : 'Response Message' }}
+                </Label>
                 <Textarea
                   id="response"
                   v-model="formData.response_content"
-                  placeholder="Enter the response message..."
+                  :placeholder="formData.response_type === 'transfer' ? 'Connecting you with a human agent...' : 'Enter the response message...'"
                   :rows="3"
                 />
+                <p v-if="formData.response_type === 'transfer'" class="text-xs text-muted-foreground">
+                  This message is sent before transferring the conversation to a human agent
+                </p>
               </div>
 
-              <!-- Buttons Section -->
-              <div class="space-y-2">
+              <!-- Buttons Section (only for text responses) -->
+              <div v-if="formData.response_type !== 'transfer'" class="space-y-2">
                 <div class="flex items-center justify-between">
                   <Label>Buttons (optional, max 10)</Label>
                   <Button
@@ -407,6 +430,9 @@ $: filteredRules.value = searchQuery.value
                       {{ keyword }}
                     </Badge>
                   </div>
+                  <Badge v-if="rule.response_type === 'transfer'" variant="destructive">
+                    Transfer
+                  </Badge>
                   <Badge :variant="rule.enabled ? 'default' : 'outline'">
                     {{ rule.enabled ? 'Active' : 'Inactive' }}
                   </Badge>
@@ -415,7 +441,9 @@ $: filteredRules.value = searchQuery.value
                   Match: {{ rule.match_type }} | Priority: {{ rule.priority }}
                 </p>
                 <p class="text-sm bg-muted p-2 rounded">
-                  {{ rule.response_content?.body || 'No response configured' }}
+                  {{ rule.response_type === 'transfer'
+                    ? (rule.response_content?.body || 'Transfers to agent')
+                    : (rule.response_content?.body || 'No response configured') }}
                 </p>
               </div>
               <div class="flex items-center gap-2 ml-4">

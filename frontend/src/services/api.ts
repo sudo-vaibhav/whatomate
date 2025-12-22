@@ -207,8 +207,21 @@ export const chatbotService = {
   listSessions: (params?: { status?: string; contact_id?: string }) =>
     api.get('/chatbot/sessions', { params }),
   getSession: (id: string) => api.get(`/chatbot/sessions/${id}`),
-  transferToAgent: (sessionId: string, agentId?: string) =>
-    api.post(`/chatbot/sessions/${sessionId}/transfer`, { agent_id: agentId })
+
+  // Agent Transfers
+  listTransfers: (params?: { status?: string; agent_id?: string }) =>
+    api.get('/chatbot/transfers', { params }),
+  createTransfer: (data: {
+    contact_id: string
+    whatsapp_account: string
+    agent_id?: string
+    notes?: string
+    source?: string
+  }) => api.post('/chatbot/transfers', data),
+  pickNextTransfer: () => api.post('/chatbot/transfers/pick'),
+  resumeTransfer: (id: string) => api.put(`/chatbot/transfers/${id}/resume`),
+  assignTransfer: (id: string, agentId: string | null) =>
+    api.put(`/chatbot/transfers/${id}/assign`, { agent_id: agentId })
 }
 
 export const analyticsService = {

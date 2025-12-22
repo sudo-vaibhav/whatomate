@@ -103,6 +103,12 @@ const router = createRouter({
           meta: { roles: ['admin', 'manager'] }
         },
         {
+          path: 'chatbot/transfers',
+          name: 'chatbot-transfers',
+          component: () => import('@/views/chatbot/AgentTransfersView.vue')
+          // All roles can access transfers
+        },
+        {
           path: 'settings',
           name: 'settings',
           component: () => import('@/views/settings/SettingsView.vue'),
