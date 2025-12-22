@@ -115,9 +115,11 @@ const statCards = [
             {{ settings.enabled ? 'Active' : 'Inactive' }}
           </Badge>
           <Button
-            :variant="settings.enabled ? 'destructive' : 'default'"
+            variant="outline"
+            size="sm"
             @click="toggleChatbot"
             :disabled="isToggling"
+            :class="settings.enabled ? 'text-destructive' : 'text-green-600'"
           >
             <Power class="h-4 w-4 mr-2" />
             {{ settings.enabled ? 'Disable' : 'Enable' }}

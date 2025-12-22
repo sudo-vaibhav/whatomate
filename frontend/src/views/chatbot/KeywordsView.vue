@@ -256,7 +256,7 @@ $: filteredRules.value = searchQuery.value
         </div>
         <Dialog v-model:open="isDialogOpen">
           <DialogTrigger as-child>
-            <Button @click="openCreateDialog">
+            <Button variant="outline" size="sm" @click="openCreateDialog">
               <Plus class="h-4 w-4 mr-2" />
               Add Rule
             </Button>
