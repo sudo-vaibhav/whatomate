@@ -483,6 +483,31 @@ function formatContactTime(dateStr?: string) {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+function getDateLabel(dateStr: string): string {
+  const date = new Date(dateStr)
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const diffDays = Math.floor((today.getTime() - messageDate.getTime()) / 86400000)
+
+  if (diffDays === 0) {
+    return 'Today'
+  } else if (diffDays === 1) {
+    return 'Yesterday'
+  }
+  return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+}
+
+function shouldShowDateSeparator(index: number): boolean {
+  const messages = contactsStore.messages
+  if (index === 0) return true
+
+  const currentDate = new Date(messages[index].created_at)
+  const prevDate = new Date(messages[index - 1].created_at)
+
+  return currentDate.toDateString() !== prevDate.toDateString()
+}
+
 function getMessageContent(message: Message): string {
   if (message.message_type === 'text') {
     return message.content?.body || ''
@@ -947,15 +972,28 @@ async function sendMediaMessage() {
         <!-- Messages -->
         <ScrollArea class="flex-1 p-3">
           <div class="space-y-2">
-            <div
-              v-for="message in contactsStore.messages"
+            <template
+              v-for="(message, index) in contactsStore.messages"
               :key="message.id"
-              :id="`message-${message.id}`"
-              :class="[
-                'flex group',
-                message.direction === 'outgoing' ? 'justify-end' : 'justify-start'
-              ]"
             >
+              <!-- Date separator -->
+              <div
+                v-if="shouldShowDateSeparator(index)"
+                class="flex items-center justify-center my-4"
+              >
+                <div class="px-3 py-1 bg-muted rounded-full text-xs text-muted-foreground font-medium">
+                  {{ getDateLabel(message.created_at) }}
+                </div>
+              </div>
+
+              <!-- Message bubble -->
+              <div
+                :id="`message-${message.id}`"
+                :class="[
+                  'flex group',
+                  message.direction === 'outgoing' ? 'justify-end' : 'justify-start'
+                ]"
+              >
               <div
                 :class="[
                   'chat-bubble',
@@ -1219,6 +1257,7 @@ async function sendMediaMessage() {
                 </Button>
               </div>
             </div>
+            </template>
             <div ref="messagesEndRef" />
           </div>
         </ScrollArea>
