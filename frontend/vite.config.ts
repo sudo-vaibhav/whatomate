@@ -1,10 +1,25 @@
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import compression from 'vite-plugin-compression'
 
 export default defineConfig({
   base: './',
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    // Gzip compression
+    compression({
+      algorithm: 'gzip',
+      ext: '.gz',
+      threshold: 1024 // Only compress files > 1KB
+    }),
+    // Brotli compression (better ratio)
+    compression({
+      algorithm: 'brotliCompress',
+      ext: '.br',
+      threshold: 1024
+    })
+  ],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
