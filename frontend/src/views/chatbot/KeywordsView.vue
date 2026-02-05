@@ -196,16 +196,16 @@ async function saveRule() {
 
     if (editingRule.value) {
       await chatbotService.updateKeyword(editingRule.value.id, data)
-      toast.success(t('keywords.ruleUpdated'))
+      toast.success(t('common.updatedSuccess', { resource: t('resources.KeywordRule') }))
     } else {
       await chatbotService.createKeyword(data)
-      toast.success(t('keywords.ruleCreated'))
+      toast.success(t('common.createdSuccess', { resource: t('resources.KeywordRule') }))
     }
 
     isDialogOpen.value = false
     await fetchRules()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, t('keywords.saveFailed')))
+    toast.error(getErrorMessage(error, t('common.failedSave', { resource: t('resources.keywordRule') })))
   } finally {
     isSubmitting.value = false
   }
@@ -221,12 +221,12 @@ async function confirmDeleteRule() {
 
   try {
     await chatbotService.deleteKeyword(ruleToDelete.value.id)
-    toast.success(t('keywords.ruleDeleted'))
+    toast.success(t('common.deletedSuccess', { resource: t('resources.KeywordRule') }))
     deleteDialogOpen.value = false
     ruleToDelete.value = null
     await fetchRules()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, t('keywords.deleteFailed')))
+    toast.error(getErrorMessage(error, t('common.failedDelete', { resource: t('resources.keywordRule') })))
   }
 }
 
@@ -234,9 +234,9 @@ async function toggleRule(rule: KeywordRule) {
   try {
     await chatbotService.updateKeyword(rule.id, { enabled: !rule.enabled })
     rule.enabled = !rule.enabled
-    toast.success(rule.enabled ? t('keywords.ruleEnabled') : t('keywords.ruleDisabled'))
+    toast.success(rule.enabled ? t('common.enabledSuccess', { resource: t('resources.KeywordRule') }) : t('common.disabledSuccess', { resource: t('resources.KeywordRule') }))
   } catch (error: any) {
-    toast.error(getErrorMessage(error, t('keywords.toggleFailed')))
+    toast.error(getErrorMessage(error, t('common.failedToggle', { resource: t('resources.keywordRule') })))
   }
 }
 

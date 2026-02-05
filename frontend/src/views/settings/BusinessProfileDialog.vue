@@ -123,7 +123,7 @@ async function fetchProfile() {
 
   } catch (error: any) {
     console.error('Failed to fetch business profile:', error)
-    toast.error(t('businessProfile.loadFailed'))
+    toast.error(t('common.failedLoad', { resource: t('resources.businessProfile') }))
   } finally {
     isLoading.value = false
   }
@@ -148,11 +148,11 @@ async function saveProfile() {
     }
 
     await api.put(`/accounts/${props.accountId}/business_profile`, payload)
-    toast.success(t('businessProfile.updateSuccess'))
+    toast.success(t('common.updatedSuccess', { resource: t('resources.BusinessProfile') }))
     emit('update:open', false)
   } catch (error: any) {
     console.error('Failed to update profile:', error)
-    const message = error.response?.data?.message || t('businessProfile.updateFailed')
+    const message = error.response?.data?.message || t('common.failedUpdate', { resource: t('resources.businessProfile') })
     toast.error(message)
   } finally {
     isSubmitting.value = false
@@ -193,12 +193,12 @@ async function handleFileChange(event: Event) {
         'Content-Type': 'multipart/form-data'
       }
     })
-    toast.success(t('businessProfile.photoUpdated'))
+    toast.success(t('common.updatedSuccess', { resource: t('resources.ProfilePhoto') }))
     // Refresh
     await fetchProfile()
   } catch (error: any) {
     console.error('Failed to upload photo:', error)
-    toast.error(error.response?.data?.message || t('businessProfile.photoUploadFailed'))
+    toast.error(error.response?.data?.message || t('common.failedUpload', { resource: t('resources.profilePhoto') }))
   } finally {
     isUploading.value = false
     // Reset input

@@ -128,7 +128,7 @@ async function fetchAccounts() {
     accounts.value = response.data.data?.accounts || []
   } catch (error: any) {
     console.error('Failed to fetch accounts:', error)
-    toast.error(t('accounts.loadAccountsFailed'))
+    toast.error(t('common.failedLoad', { resource: t('resources.accounts') }))
     accounts.value = []
   } finally {
     isLoading.value = false
@@ -195,16 +195,16 @@ async function saveAccount() {
 
     if (editingAccount.value) {
       await api.put(`/accounts/${editingAccount.value.id}`, payload)
-      toast.success(t('accounts.accountUpdated'))
+      toast.success(t('common.updatedSuccess', { resource: t('resources.Account') }))
     } else {
       await api.post('/accounts', payload)
-      toast.success(t('accounts.accountCreated'))
+      toast.success(t('common.createdSuccess', { resource: t('resources.Account') }))
     }
 
     isDialogOpen.value = false
     await fetchAccounts()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, t('accounts.saveAccountFailed')))
+    toast.error(getErrorMessage(error, t('common.failedSave', { resource: t('resources.account') })))
   } finally {
     isSubmitting.value = false
   }
@@ -220,12 +220,12 @@ async function confirmDelete() {
 
   try {
     await api.delete(`/accounts/${accountToDelete.value.id}`)
-    toast.success(t('accounts.accountDeleted'))
+    toast.success(t('common.deletedSuccess', { resource: t('resources.Account') }))
     deleteDialogOpen.value = false
     accountToDelete.value = null
     await fetchAccounts()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, t('accounts.deleteAccountFailed')))
+    toast.error(getErrorMessage(error, t('common.failedDelete', { resource: t('resources.account') })))
   }
 }
 
@@ -265,9 +265,9 @@ async function subscribeApp(account: WhatsAppAccount) {
   }
 }
 
-function copyToClipboard(text: string, label: string) {
+function copyToClipboard(text: string, _label: string) {
   navigator.clipboard.writeText(text)
-  toast.success(`${label} copied to clipboard`)
+  toast.success(t('common.copiedToClipboard'))
 }
 
 // Dark-first: default is dark mode, light: prefix for light mode

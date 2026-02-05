@@ -71,7 +71,7 @@ async function fetchItems() {
     cannedResponses.value = data.canned_responses || []
     totalItems.value = data.total ?? cannedResponses.value.length
   } catch (error) {
-    toast.error(getErrorMessage(error, t('cannedResponses.loadFailed')))
+    toast.error(getErrorMessage(error, t('common.failedLoad', { resource: t('resources.cannedResponses') })))
   } finally {
     isLoading.value = false
   }
@@ -130,15 +130,15 @@ async function saveResponse() {
   try {
     if (editingResponse.value) {
       await cannedResponsesService.update(editingResponse.value.id, formData.value)
-      toast.success(t('cannedResponses.responseUpdated'))
+      toast.success(t('common.updatedSuccess', { resource: t('resources.CannedResponse') }))
     } else {
       await cannedResponsesService.create(formData.value)
-      toast.success(t('cannedResponses.responseCreated'))
+      toast.success(t('common.createdSuccess', { resource: t('resources.CannedResponse') }))
     }
     closeDialog()
     await fetchItems()
   } catch (error) {
-    toast.error(getErrorMessage(error, t('cannedResponses.saveFailed')))
+    toast.error(getErrorMessage(error, t('common.failedSave', { resource: t('resources.cannedResponse') })))
   } finally {
     isSubmitting.value = false
   }
@@ -148,15 +148,15 @@ async function confirmDelete() {
   if (!responseToDelete.value) return
   try {
     await cannedResponsesService.delete(responseToDelete.value.id)
-    toast.success(t('cannedResponses.responseDeleted'))
+    toast.success(t('common.deletedSuccess', { resource: t('resources.CannedResponse') }))
     closeDeleteDialog()
     await fetchItems()
   } catch (error) {
-    toast.error(getErrorMessage(error, t('cannedResponses.deleteFailed')))
+    toast.error(getErrorMessage(error, t('common.failedDelete', { resource: t('resources.cannedResponse') })))
   }
 }
 
-function copyToClipboard(content: string) { navigator.clipboard.writeText(content); toast.success(t('cannedResponses.copiedToClipboard')) }
+function copyToClipboard(content: string) { navigator.clipboard.writeText(content); toast.success(t('common.copiedToClipboard')) }
 function getCategoryLabel(category: string): string { return getLabelFromValue(CANNED_RESPONSE_CATEGORIES, category) || t('cannedResponses.uncategorized') }
 </script>
 
