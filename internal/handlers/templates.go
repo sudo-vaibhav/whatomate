@@ -60,6 +60,7 @@ func (a *App) ListTemplates(r *fastglue.Request) error {
 	accountName := string(r.RequestCtx.QueryArgs().Peek("account")) // Filter by account name
 	status := string(r.RequestCtx.QueryArgs().Peek("status"))
 	category := string(r.RequestCtx.QueryArgs().Peek("category"))
+	search := string(r.RequestCtx.QueryArgs().Peek("search"))
 
 	query := a.DB.Where("organization_id = ?", orgID)
 
@@ -71,6 +72,9 @@ func (a *App) ListTemplates(r *fastglue.Request) error {
 	}
 	if category != "" {
 		query = query.Where("category = ?", category)
+	}
+	if search != "" {
+		query = query.Where("name ILIKE ? OR display_name ILIKE ?", "%"+search+"%", "%"+search+"%")
 	}
 
 	var total int64
