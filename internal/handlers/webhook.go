@@ -183,6 +183,18 @@ type WebhookPayload struct {
 					} `json:"context,omitempty"`
 				} `json:"messages,omitempty"`
 				Statuses []WebhookStatus `json:"statuses,omitempty"`
+			Calls []struct {
+				ID        string `json:"id"`
+				From      string `json:"from"`
+				Timestamp string `json:"timestamp"`
+				Type      string `json:"type"`
+				Event     string `json:"event"`
+				SDP       string `json:"sdp,omitempty"`
+				Error     *struct {
+					Code    int    `json:"code"`
+					Message string `json:"message"`
+				} `json:"error,omitempty"`
+			} `json:"calls,omitempty"`
 			} `json:"value"`
 			Field string `json:"field"`
 		} `json:"changes"`
@@ -215,6 +227,21 @@ func (a *App) WebhookHandler(r *fastglue.Request) error {
 					"waba_id", entry.ID,
 				)
 				go a.processTemplateStatusUpdate(entry.ID, change.Value.Event, change.Value.MessageTemplateName, change.Value.MessageTemplateLanguage, change.Value.Reason)
+				continue
+			}
+
+			// Handle voice call events
+			if change.Field == "calls" {
+				phoneNumberID := change.Value.Metadata.PhoneNumberID
+				for _, call := range change.Value.Calls {
+					a.Log.Info("Received call event",
+						"call_id", call.ID,
+						"from", call.From,
+						"event", call.Event,
+						"phone_number_id", phoneNumberID,
+					)
+					go a.processCallWebhook(phoneNumberID, call)
+				}
 				continue
 			}
 

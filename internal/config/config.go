@@ -22,6 +22,16 @@ type Config struct {
 	DefaultAdmin  DefaultAdminConfig  `koanf:"default_admin"`
 	RateLimit     RateLimitConfig     `koanf:"rate_limit"`
 	Cookie        CookieConfig        `koanf:"cookie"`
+	Calling       CallingConfig       `koanf:"calling"`
+}
+
+type CallingConfig struct {
+	Enabled             bool   `koanf:"enabled"`
+	MaxCallDuration     int    `koanf:"max_call_duration"`
+	AudioDir            string `koanf:"audio_dir"`
+	HoldMusicFile       string `koanf:"hold_music_file"`
+	TransferTimeoutSecs int    `koanf:"transfer_timeout_secs"`
+	RingbackFile        string `koanf:"ringback_file"`
 }
 
 type AppConfig struct {
@@ -221,5 +231,18 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.RateLimit.WindowSeconds == 0 {
 		cfg.RateLimit.WindowSeconds = 60
+	}
+	// Calling defaults
+	if cfg.Calling.MaxCallDuration == 0 {
+		cfg.Calling.MaxCallDuration = 300
+	}
+	if cfg.Calling.AudioDir == "" {
+		cfg.Calling.AudioDir = "./audio"
+	}
+	if cfg.Calling.HoldMusicFile == "" {
+		cfg.Calling.HoldMusicFile = "hold_music.opus"
+	}
+	if cfg.Calling.TransferTimeoutSecs == 0 {
+		cfg.Calling.TransferTimeoutSecs = 120
 	}
 }
