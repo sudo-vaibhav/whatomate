@@ -58,6 +58,7 @@ type CallSession struct {
 // IVRMenuNode represents a node in the IVR menu tree (parsed from JSONB)
 type IVRMenuNode struct {
 	Greeting            string                 `json:"greeting"`
+	GreetingText        string                 `json:"greeting_text,omitempty"`
 	Options             map[string]IVROption   `json:"options"`
 	TimeoutSeconds      int                    `json:"timeout_seconds"`
 	MaxRetries          int                    `json:"max_retries"`
@@ -86,6 +87,20 @@ type Manager struct {
 
 // NewManager creates a new call session manager
 func NewManager(cfg *config.CallingConfig, db *gorm.DB, waClient *whatsapp.Client, wsHub *websocket.Hub, log logf.Logger) *Manager {
+	// Apply defaults for server-level config
+	if cfg.AudioDir == "" {
+		cfg.AudioDir = "./audio"
+	}
+	if cfg.HoldMusicFile == "" {
+		cfg.HoldMusicFile = "hold.ogg"
+	}
+	if cfg.MaxCallDuration <= 0 {
+		cfg.MaxCallDuration = 3600
+	}
+	if cfg.TransferTimeoutSecs <= 0 {
+		cfg.TransferTimeoutSecs = 60
+	}
+
 	return &Manager{
 		sessions: make(map[string]*CallSession),
 		log:      log,
@@ -96,7 +111,9 @@ func NewManager(cfg *config.CallingConfig, db *gorm.DB, waClient *whatsapp.Clien
 	}
 }
 
-// HandleIncomingCall processes a new incoming call with optional SDP offer
+// HandleIncomingCall processes a new incoming call and starts WebRTC negotiation.
+// The sdpOffer parameter is the consumer's SDP offer received from the webhook's
+// session.sdp field in the "connect" event.
 func (m *Manager) HandleIncomingCall(account *models.WhatsAppAccount, contact *models.Contact, callLog *models.CallLog, sdpOffer string) {
 	session := &CallSession{
 		ID:             callLog.WhatsAppCallID,
@@ -126,13 +143,11 @@ func (m *Manager) HandleIncomingCall(account *models.WhatsAppAccount, contact *m
 	m.log.Info("Call session created",
 		"call_id", session.ID,
 		"caller", session.CallerPhone,
-		"has_sdp", sdpOffer != "",
+		"has_sdp_offer", sdpOffer != "",
 	)
 
-	// If SDP offer is provided, initiate WebRTC negotiation
-	if sdpOffer != "" {
-		go m.negotiateWebRTC(session, account, sdpOffer)
-	}
+	// Start WebRTC negotiation using the consumer's SDP offer
+	go m.negotiateWebRTC(session, account, sdpOffer)
 }
 
 // HandleCallEvent processes a call lifecycle event (in_call, ended, etc.)
@@ -149,9 +164,9 @@ func (m *Manager) HandleCallEvent(callID, event string) {
 	defer session.mu.Unlock()
 
 	switch event {
-	case "in_call":
+	case "in_call", "connect":
 		session.Status = models.CallStatusAnswered
-	case "ended", "missed", "unanswered":
+	case "ended", "terminate", "missed", "unanswered":
 		// If caller hangs up during a transfer, mark it as abandoned
 		if session.TransferStatus == models.CallTransferStatusWaiting {
 			session.mu.Unlock()
@@ -192,6 +207,18 @@ func (m *Manager) GetSessionByCallLogID(callLogID uuid.UUID) *CallSession {
 		}
 	}
 	return nil
+}
+
+// getOrgTransferTimeout returns the transfer timeout for a session's organization,
+// falling back to the global config default.
+func (m *Manager) getOrgTransferTimeout(orgID uuid.UUID) int {
+	var org models.Organization
+	if err := m.db.Where("id = ?", orgID).First(&org).Error; err == nil && org.Settings != nil {
+		if v, ok := org.Settings["transfer_timeout_secs"].(float64); ok && v > 0 {
+			return int(v)
+		}
+	}
+	return m.config.TransferTimeoutSecs
 }
 
 // cleanupSession removes a session and releases WebRTC resources

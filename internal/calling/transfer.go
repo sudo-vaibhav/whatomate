@@ -66,8 +66,9 @@ func (m *Manager) initiateTransfer(session *CallSession, waAccount string, teamT
 
 	go player.PlayFileLoop(holdFile)
 
-	// Start timeout goroutine
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(m.config.TransferTimeoutSecs)*time.Second)
+	// Start timeout goroutine (use org-level override if set)
+	transferTimeout := m.getOrgTransferTimeout(session.OrganizationID)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(transferTimeout)*time.Second)
 
 	session.mu.Lock()
 	session.TransferCancel = cancel

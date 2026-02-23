@@ -63,6 +63,15 @@ sso_max_attempts = 10          # Max SSO init/callback attempts per IP per windo
 window_seconds = 60            # Time window in seconds
 trust_proxy = false            # Trust X-Forwarded-For / X-Real-IP headers (set true behind reverse proxy)
 
+# Text-to-Speech for IVR greetings (optional, requires piper + opusenc installed)
+# Download piper: https://github.com/rhasspy/piper/releases
+# Download voice models: https://huggingface.co/rhasspy/piper-voices
+# Install opusenc: apt install opus-tools (Debian/Ubuntu) / dnf install opus-tools (Fedora)
+[tts]
+# piper_binary = "/usr/local/bin/piper"
+# piper_model = "/opt/piper/models/en_US-lessac-medium.onnx"
+# opusenc_binary = "opusenc"  # defaults to finding in PATH
+
 # Default admin credentials (only used during initial setup when no users exist)
 [default_admin]
 email = "admin@admin.com"

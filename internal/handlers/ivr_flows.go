@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -108,6 +110,14 @@ func (a *App) CreateIVRFlow(r *fastglue.Request) error {
 			Update("is_active", false)
 	}
 
+	// Generate TTS audio for greeting_text fields in the menu tree
+	if a.TTS != nil && req.Menu != nil {
+		if err := a.generateIVRAudio(req.Menu); err != nil {
+			a.Log.Error("TTS generation failed", "error", err)
+			// Non-fatal: save the flow anyway, audio can be regenerated
+		}
+	}
+
 	flow := models.IVRFlow{
 		BaseModel:       models.BaseModel{ID: uuid.New()},
 		OrganizationID:  orgID,
@@ -158,6 +168,13 @@ func (a *App) UpdateIVRFlow(r *fastglue.Request) error {
 			Where("organization_id = ? AND whatsapp_account = ? AND is_active = ? AND id != ?",
 				orgID, flow.WhatsAppAccount, true, flowID).
 			Update("is_active", false)
+	}
+
+	// Generate TTS audio for greeting_text fields in the menu tree
+	if a.TTS != nil && req.Menu != nil {
+		if err := a.generateIVRAudio(req.Menu); err != nil {
+			a.Log.Error("TTS generation failed", "error", err)
+		}
 	}
 
 	updates := map[string]any{
@@ -228,13 +245,18 @@ func (a *App) UploadIVRAudio(r *fastglue.Request) error {
 	}
 
 	// Parse multipart form
+	contentType := string(r.RequestCtx.Request.Header.ContentType())
+	a.Log.Debug("IVR audio upload", "content_type", contentType, "body_size", len(r.RequestCtx.Request.Body()))
+
 	form, err := r.RequestCtx.MultipartForm()
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid multipart form", nil, "")
+		a.Log.Error("Multipart parse failed", "error", err, "content_type", contentType)
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid multipart form: "+err.Error(), nil, "")
 	}
 
 	files := form.File["file"]
 	if len(files) == 0 {
+		a.Log.Error("No file in multipart form", "form_keys", fmt.Sprintf("%v", form.Value))
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "No file provided", nil, "")
 	}
 
@@ -258,15 +280,27 @@ func (a *App) UploadIVRAudio(r *fastglue.Request) error {
 	// Validate MIME type
 	mimeType := fileHeader.Header.Get("Content-Type")
 	allowedAudio := map[string]bool{
-		"audio/ogg":  true,
-		"audio/opus": true,
-		"audio/mpeg": true,
-		"audio/aac":  true,
-		"audio/mp4":  true,
-		"audio/wav":  true,
+		"audio/ogg":             true,
+		"audio/opus":            true,
+		"audio/mpeg":            true,
+		"audio/mp3":             true,
+		"audio/aac":             true,
+		"audio/mp4":             true,
+		"audio/wav":             true,
+		"audio/x-wav":           true,
+		"audio/wave":            true,
+		"audio/webm":            true,
+		"audio/flac":            true,
+		"audio/x-flac":          true,
+		"audio/x-m4a":           true,
+		"audio/m4a":             true,
+		"application/ogg":       true,
+		"application/octet-stream": true, // fallback for unknown audio
+		"video/ogg":             true, // some browsers report .ogg as video/ogg
 	}
 	if !allowedAudio[mimeType] {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Unsupported audio type: "+mimeType+". Allowed: ogg, opus, mpeg, aac, mp4, wav", nil, "")
+		a.Log.Error("Unsupported audio MIME type", "mime_type", mimeType, "filename", fileHeader.Filename)
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Unsupported audio type: "+mimeType, nil, "")
 	}
 
 	// Determine extension
@@ -348,6 +382,60 @@ func (a *App) ServeIVRAudio(r *fastglue.Request) error {
 	r.RequestCtx.Response.Header.Set("Content-Type", contentType)
 	r.RequestCtx.Response.Header.Set("Cache-Control", "private, max-age=3600")
 	r.RequestCtx.SetBody(data)
+
+	return nil
+}
+
+// generateIVRAudio walks the IVR menu JSONB tree and generates TTS audio
+// for any node with a non-empty "greeting_text" field. The generated audio
+// filename is set as the node's "greeting" field.
+func (a *App) generateIVRAudio(menu models.JSONB) error {
+	return walkMenuTTS(menu, a.TTS.Generate)
+}
+
+// walkMenuTTS recursively walks a menu JSONB node and calls generate for each
+// node with greeting_text set. It updates the greeting field in-place.
+func walkMenuTTS(menu models.JSONB, generate func(string) (string, error)) error {
+	greetingText, _ := menu["greeting_text"].(string)
+	if greetingText != "" {
+		filename, err := generate(greetingText)
+		if err != nil {
+			return err
+		}
+		menu["greeting"] = filename
+	}
+
+	// Recurse into options → submenu
+	opts, _ := menu["options"].(map[string]interface{})
+	if opts == nil {
+		// Handle case where JSONB was deserialized via json.Unmarshal
+		if raw, ok := menu["options"]; ok {
+			if b, err := json.Marshal(raw); err == nil {
+				var parsed map[string]interface{}
+				if json.Unmarshal(b, &parsed) == nil {
+					opts = parsed
+				}
+			}
+		}
+	}
+
+	for _, optRaw := range opts {
+		opt, ok := optRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		subRaw, ok := opt["menu"]
+		if !ok {
+			continue
+		}
+		sub, ok := subRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if err := walkMenuTTS(sub, generate); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

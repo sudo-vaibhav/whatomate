@@ -10,7 +10,15 @@ import (
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 )
 
-// negotiateWebRTC handles the SDP offer/answer exchange and sets up WebRTC media
+// negotiateWebRTC handles the SDP exchange and sets up WebRTC media.
+//
+// Per the WhatsApp Business Calling API (user-initiated calls):
+//  1. Webhook "connect" delivers the consumer's SDP offer (in session.sdp)
+//  2. Business creates a PeerConnection and sets the offer as remote description
+//  3. Business creates an SDP answer
+//  4. Business sends pre_accept with session: { sdp_type: "answer", sdp: "<SDP>" }
+//  5. Business sends accept with the same session object
+//  6. WebRTC media flows
 func (m *Manager) negotiateWebRTC(session *CallSession, account *models.WhatsAppAccount, sdpOffer string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -20,13 +28,6 @@ func (m *Manager) negotiateWebRTC(session *CallSession, account *models.WhatsApp
 		BusinessID:  account.BusinessID,
 		APIVersion:  account.APIVersion,
 		AccessToken: account.AccessToken,
-	}
-
-	// Pre-accept the call to keep it alive while we set up WebRTC
-	if err := m.whatsapp.PreAcceptCall(ctx, waAccount, session.ID); err != nil {
-		m.log.Error("Failed to pre-accept call", "error", err, "call_id", session.ID)
-		m.rejectCall(ctx, waAccount, session.ID)
-		return
 	}
 
 	// Create peer connection with Opus codec
@@ -41,7 +42,7 @@ func (m *Manager) negotiateWebRTC(session *CallSession, account *models.WhatsApp
 	session.PeerConnection = pc
 	session.mu.Unlock()
 
-	// Add local audio track for IVR playback
+	// Add local audio track for IVR playback / server→caller audio
 	audioTrack, err := webrtc.NewTrackLocalStaticRTP(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus},
 		"audio",
@@ -87,6 +88,9 @@ func (m *Manager) negotiateWebRTC(session *CallSession, account *models.WhatsApp
 		go m.consumeAudioTrack(session, track)
 	})
 
+	// Channel to signal when the WebRTC connection is established
+	connected := make(chan struct{})
+
 	// Handle connection state changes
 	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		m.log.Info("Peer connection state changed",
@@ -94,23 +98,28 @@ func (m *Manager) negotiateWebRTC(session *CallSession, account *models.WhatsApp
 			"state", state.String(),
 		)
 		switch state {
+		case webrtc.PeerConnectionStateConnected:
+			select {
+			case <-connected:
+			default:
+				close(connected)
+			}
 		case webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateDisconnected:
 			m.EndCall(session.ID)
 		}
 	})
 
-	// Set the remote SDP offer
-	offer := webrtc.SessionDescription{
+	// Step 1: Set the consumer's SDP offer as remote description
+	if err := pc.SetRemoteDescription(webrtc.SessionDescription{
 		Type: webrtc.SDPTypeOffer,
 		SDP:  sdpOffer,
-	}
-	if err := pc.SetRemoteDescription(offer); err != nil {
-		m.log.Error("Failed to set remote description", "error", err, "call_id", session.ID)
+	}); err != nil {
+		m.log.Error("Failed to set remote description (consumer offer)", "error", err, "call_id", session.ID)
 		m.rejectCall(ctx, waAccount, session.ID)
 		return
 	}
 
-	// Create SDP answer
+	// Step 2: Create SDP answer
 	answer, err := pc.CreateAnswer(nil)
 	if err != nil {
 		m.log.Error("Failed to create SDP answer", "error", err, "call_id", session.ID)
@@ -118,9 +127,8 @@ func (m *Manager) negotiateWebRTC(session *CallSession, account *models.WhatsApp
 		return
 	}
 
-	// Set local description
 	if err := pc.SetLocalDescription(answer); err != nil {
-		m.log.Error("Failed to set local description", "error", err, "call_id", session.ID)
+		m.log.Error("Failed to set local description (answer)", "error", err, "call_id", session.ID)
 		m.rejectCall(ctx, waAccount, session.ID)
 		return
 	}
@@ -136,7 +144,6 @@ func (m *Manager) negotiateWebRTC(session *CallSession, account *models.WhatsApp
 		return
 	}
 
-	// Accept the call with SDP answer
 	localDesc := pc.LocalDescription()
 	if localDesc == nil {
 		m.log.Error("No local description available", "call_id", session.ID)
@@ -144,7 +151,17 @@ func (m *Manager) negotiateWebRTC(session *CallSession, account *models.WhatsApp
 		return
 	}
 
-	if err := m.whatsapp.AcceptCall(ctx, waAccount, session.ID, localDesc.SDP); err != nil {
+	sdpAnswer := localDesc.SDP
+
+	// Step 3: Pre-accept with our SDP answer
+	if err := m.whatsapp.PreAcceptCall(ctx, waAccount, session.ID, sdpAnswer); err != nil {
+		m.log.Error("Failed to pre-accept call", "error", err, "call_id", session.ID)
+		m.rejectCall(ctx, waAccount, session.ID)
+		return
+	}
+
+	// Step 4: Accept with the same SDP answer
+	if err := m.whatsapp.AcceptCall(ctx, waAccount, session.ID, sdpAnswer); err != nil {
 		m.log.Error("Failed to accept call via API", "error", err, "call_id", session.ID)
 		return
 	}
@@ -153,7 +170,19 @@ func (m *Manager) negotiateWebRTC(session *CallSession, account *models.WhatsApp
 	session.Status = models.CallStatusAnswered
 	session.mu.Unlock()
 
-	m.log.Info("Call accepted with WebRTC", "call_id", session.ID)
+	m.log.Info("Call accepted with WebRTC, waiting for media connection", "call_id", session.ID)
+
+	// Wait for the WebRTC media connection to be established before starting IVR.
+	// ICE connectivity checks run after the SDP exchange; we must wait for them
+	// to complete before audio can flow.
+	select {
+	case <-connected:
+		m.log.Info("WebRTC media connected", "call_id", session.ID)
+	case <-time.After(15 * time.Second):
+		m.log.Error("WebRTC media connection timed out", "call_id", session.ID)
+		m.terminateCall(session, waAccount)
+		return
+	}
 
 	// Start IVR flow if configured
 	if session.IVRFlow != nil {
@@ -163,7 +192,6 @@ func (m *Manager) negotiateWebRTC(session *CallSession, account *models.WhatsApp
 
 // createPeerConnection creates a new WebRTC peer connection with Opus codec support
 func (m *Manager) createPeerConnection() (*webrtc.PeerConnection, error) {
-	// Configure with STUN servers for NAT traversal
 	config := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{
@@ -197,7 +225,22 @@ func (m *Manager) createPeerConnection() (*webrtc.PeerConnection, error) {
 		return nil, fmt.Errorf("failed to register telephone-event codec: %w", err)
 	}
 
-	api := webrtc.NewAPI(webrtc.WithMediaEngine(mediaEngine))
+	// Configure UDP port range and build API
+	settingEngine := webrtc.SettingEngine{}
+	portMin := m.config.UDPPortMin
+	portMax := m.config.UDPPortMax
+	if portMin == 0 {
+		portMin = 10000
+	}
+	if portMax == 0 {
+		portMax = 10100
+	}
+	settingEngine.SetEphemeralUDPPortRange(portMin, portMax)
+
+	api := webrtc.NewAPI(
+		webrtc.WithMediaEngine(mediaEngine),
+		webrtc.WithSettingEngine(settingEngine),
+	)
 	return api.NewPeerConnection(config)
 }
 

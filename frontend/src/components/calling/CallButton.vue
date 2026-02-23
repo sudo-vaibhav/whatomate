@@ -2,12 +2,14 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCallingStore } from '@/stores/calling'
+import { outgoingCallsService } from '@/services/api'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Phone, Loader2 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 const props = defineProps<{
+  contactId: string
   contactPhone: string
   contactName: string
   whatsappAccount: string
@@ -22,7 +24,28 @@ async function handleCall() {
 
   isInitiating.value = true
   try {
-    await store.makeOutgoingCall(props.contactPhone, props.contactName, props.whatsappAccount)
+    // Check if we already have call permission via WhatsApp API
+    let hasPermission = false
+    try {
+      const resp = await outgoingCallsService.getPermission(props.contactId, props.whatsappAccount)
+      const perm = (resp.data as any).data ?? resp.data
+      hasPermission = perm.status === 'temporary' || perm.status === 'permanent'
+    } catch {
+      // No permission found
+    }
+
+    if (hasPermission) {
+      await store.makeOutgoingCall(props.contactId, props.contactName, props.whatsappAccount)
+    } else {
+      // Send permission request and notify the agent
+      await outgoingCallsService.requestPermission({
+        contact_id: props.contactId,
+        whatsapp_account: props.whatsappAccount,
+      })
+      toast.info(t('outgoingCalls.permissionSent'), {
+        description: t('outgoingCalls.permissionSentDesc'),
+      })
+    }
   } catch (err: any) {
     toast.error(t('outgoingCalls.callFailed'), {
       description: err.message || String(err),

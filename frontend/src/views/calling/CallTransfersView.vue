@@ -81,7 +81,7 @@ onMounted(() => {
   <div class="p-6 space-y-6">
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-2xl font-bold text-zinc-100">{{ t('callTransfers.title') }}</h1>
+        <h1 class="text-2xl font-bold">{{ t('callTransfers.title') }}</h1>
       </div>
       <Button variant="outline" size="sm" @click="store.fetchWaitingTransfers(); fetchHistory()">
         <RefreshCw class="h-4 w-4 mr-2" />

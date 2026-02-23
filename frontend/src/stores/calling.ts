@@ -216,7 +216,7 @@ export const useCallingStore = defineStore('calling', () => {
   }
 
   // Outgoing call actions
-  async function makeOutgoingCall(contactPhone: string, contactName: string, whatsappAccount: string) {
+  async function makeOutgoingCall(contactId: string, contactName: string, whatsappAccount: string) {
     // Get microphone access
     let stream: MediaStream
     try {
@@ -270,7 +270,7 @@ export const useCallingStore = defineStore('calling', () => {
 
     // Send to server
     const response = await outgoingCallsService.initiate({
-      contact_phone: contactPhone,
+      contact_id: contactId,
       whatsapp_account: whatsappAccount,
       sdp_offer: sdpOffer,
     })
@@ -288,7 +288,7 @@ export const useCallingStore = defineStore('calling', () => {
     outgoingCallLogId.value = callLogId
     outgoingCallStatus.value = 'initiating'
     outgoingContactName.value = contactName
-    outgoingContactPhone.value = contactPhone
+    outgoingContactPhone.value = ''
     isOnCall.value = true
     callDuration.value = 0
 

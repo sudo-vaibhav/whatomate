@@ -4,13 +4,16 @@ import { useI18n } from 'vue-i18n'
 import type { IVRMenu, IVRMenuOption } from '@/services/api'
 import { ivrFlowsService } from '@/services/api'
 import { useCallingStore } from '@/stores/calling'
+import { useTeamsStore } from '@/stores/teams'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Trash2, Upload, X, Play, Pause, Loader2 } from 'lucide-vue-next'
+import { Plus, Trash2, Upload, X, Play, Pause, Loader2, Type } from 'lucide-vue-next'
 import { useToast } from '@/components/ui/toast'
 
 const props = defineProps<{
@@ -39,6 +42,11 @@ const menu = computed({
   set: (val) => emit('update:modelValue', val)
 })
 
+// Greeting mode: 'audio' for uploaded files, 'text' for TTS
+const greetingTab = computed(() =>
+  menu.value.greeting_text ? 'text' : 'audio'
+)
+
 const optionEntries = computed(() => {
   const opts = menu.value.options || {}
   return Object.entries(opts).sort(([a], [b]) => {
@@ -54,6 +62,12 @@ const availableDigits = computed(() => {
 })
 
 const callingStore = useCallingStore()
+const teamsStore = useTeamsStore()
+
+// Load teams if not already fetched
+if (teamsStore.teams.length === 0) {
+  teamsStore.fetchTeams()
+}
 
 // Other IVR flows available as goto targets (exclude current flow)
 const gotoFlowTargets = computed(() =>
@@ -68,6 +82,21 @@ const actionOptions = [
   { value: 'repeat', label: 'Repeat menu' },
   { value: 'hangup', label: 'Hang up' }
 ]
+
+function onGreetingTabChange(tab: string | number) {
+  if (tab === 'text') {
+    // Switching to text mode: clear uploaded audio
+    stopAudio()
+    emit('update:modelValue', { ...menu.value, greeting: '', greeting_text: menu.value.greeting_text || '' })
+  } else {
+    // Switching to audio mode: clear greeting text
+    emit('update:modelValue', { ...menu.value, greeting_text: undefined })
+  }
+}
+
+function updateGreetingText(text: string) {
+  emit('update:modelValue', { ...menu.value, greeting_text: text, greeting: '' })
+}
 
 function triggerFileUpload() {
   audioFileInput.value?.click()
@@ -90,7 +119,7 @@ async function handleFileSelect(event: Event) {
     const res = await ivrFlowsService.uploadAudio(file)
     const filename = res.data?.data?.filename
     if (filename) {
-      emit('update:modelValue', { ...menu.value, greeting: filename })
+      emit('update:modelValue', { ...menu.value, greeting: filename, greeting_text: undefined })
       toast({ title: t('calling.audioUploaded') })
     }
   } catch {
@@ -198,36 +227,68 @@ function updateSubmenu(digit: string, submenu: IVRMenu) {
       </CardTitle>
     </CardHeader>
     <CardContent class="space-y-4">
-      <!-- Greeting Audio -->
+      <!-- Greeting: Upload Audio or Text to Speech -->
       <div class="space-y-2">
         <Label class="text-xs">{{ t('calling.greeting') }}</Label>
-        <div class="flex items-center gap-2">
-          <div v-if="menu.greeting" class="flex items-center gap-2 flex-1 min-w-0 px-3 py-1.5 border rounded-md bg-muted/50">
-            <Button variant="ghost" size="icon" class="h-6 w-6 shrink-0" @click="togglePlayback">
-              <Pause v-if="isPlaying" class="h-3 w-3" />
-              <Play v-else class="h-3 w-3" />
-            </Button>
-            <span class="text-sm truncate">{{ menu.greeting }}</span>
-            <Button variant="ghost" size="icon" class="h-6 w-6 shrink-0 ml-auto" @click="removeAudio">
-              <X class="h-3 w-3 text-destructive" />
-            </Button>
-          </div>
-          <div v-else class="flex-1 text-sm text-muted-foreground px-3 py-1.5 border rounded-md border-dashed">
-            {{ t('calling.greetingPlaceholder') }}
-          </div>
-          <Button variant="outline" size="sm" class="h-8 shrink-0" @click="triggerFileUpload" :disabled="isUploading">
-            <Loader2 v-if="isUploading" class="h-3 w-3 mr-1 animate-spin" />
-            <Upload v-else class="h-3 w-3 mr-1" />
-            {{ t('calling.uploadAudio') }}
-          </Button>
-          <input
-            ref="audioFileInput"
-            type="file"
-            accept="audio/*"
-            class="hidden"
-            @change="handleFileSelect"
-          />
-        </div>
+        <Tabs :default-value="greetingTab" @update:model-value="onGreetingTabChange">
+          <TabsList class="h-8">
+            <TabsTrigger value="audio" class="text-xs h-7 px-3">
+              <Upload class="h-3 w-3 mr-1" />
+              {{ t('calling.uploadAudioTab') }}
+            </TabsTrigger>
+            <TabsTrigger value="text" class="text-xs h-7 px-3">
+              <Type class="h-3 w-3 mr-1" />
+              {{ t('calling.textToSpeechTab') }}
+            </TabsTrigger>
+          </TabsList>
+
+          <!-- Upload Audio tab -->
+          <TabsContent value="audio" class="mt-2">
+            <div class="flex items-center gap-2">
+              <div v-if="menu.greeting && !menu.greeting_text" class="flex items-center gap-2 flex-1 min-w-0 px-3 py-1.5 border rounded-md bg-muted/50">
+                <Button variant="ghost" size="icon" class="h-6 w-6 shrink-0" @click="togglePlayback">
+                  <Pause v-if="isPlaying" class="h-3 w-3" />
+                  <Play v-else class="h-3 w-3" />
+                </Button>
+                <span class="text-sm truncate">{{ menu.greeting }}</span>
+                <Button variant="ghost" size="icon" class="h-6 w-6 shrink-0 ml-auto" @click="removeAudio">
+                  <X class="h-3 w-3 text-destructive" />
+                </Button>
+              </div>
+              <div v-else class="flex-1 text-sm text-muted-foreground px-3 py-1.5 border rounded-md border-dashed">
+                {{ t('calling.greetingPlaceholder') }}
+              </div>
+              <Button variant="outline" size="sm" class="h-8 shrink-0" @click="triggerFileUpload" :disabled="isUploading">
+                <Loader2 v-if="isUploading" class="h-3 w-3 mr-1 animate-spin" />
+                <Upload v-else class="h-3 w-3 mr-1" />
+                {{ t('calling.uploadAudio') }}
+              </Button>
+              <input
+                ref="audioFileInput"
+                type="file"
+                accept="audio/*"
+                class="hidden"
+                @change="handleFileSelect"
+              />
+            </div>
+          </TabsContent>
+
+          <!-- Text to Speech tab -->
+          <TabsContent value="text" class="mt-2">
+            <div class="relative">
+              <Textarea
+                :model-value="menu.greeting_text || ''"
+                @update:model-value="updateGreetingText"
+                :placeholder="t('calling.greetingTextPlaceholder')"
+                class="min-h-[80px] text-sm resize-none"
+                :maxlength="500"
+              />
+              <span class="absolute bottom-2 right-2 text-xs text-muted-foreground">
+                {{ (menu.greeting_text || '').length }}/500
+              </span>
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
 
       <!-- Timeout & Retries (root only) -->
@@ -311,14 +372,22 @@ function updateSubmenu(digit: string, submenu: IVRMenu) {
             </Button>
           </div>
 
-          <!-- Transfer target -->
+          <!-- Transfer target (team) -->
           <div v-if="option.action === 'transfer'" class="pl-8">
-            <Input
-              :model-value="option.target || ''"
-              @update:model-value="(v: string) => updateOption(digit, 'target', v)"
-              :placeholder="t('calling.transferTarget')"
-              class="h-8 text-sm"
-            />
+            <Select
+              :model-value="option.target || 'none'"
+              @update:model-value="(v: any) => updateOption(digit, 'target', String(v) === 'none' ? '' : String(v))"
+            >
+              <SelectTrigger class="h-8 text-sm">
+                <SelectValue :placeholder="t('calling.transferTarget')" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">{{ t('calling.transferTarget') }}</SelectItem>
+                <SelectItem v-for="team in teamsStore.teams" :key="team.id" :value="team.id">
+                  {{ team.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <!-- Goto flow target -->

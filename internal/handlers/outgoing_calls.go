@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"time"
-
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
@@ -22,7 +20,7 @@ func (a *App) InitiateOutgoingCall(r *fastglue.Request) error {
 	}
 
 	var req struct {
-		ContactPhone    string `json:"contact_phone"`
+		ContactID       string `json:"contact_id"`
 		WhatsAppAccount string `json:"whatsapp_account"`
 		SDPOffer        string `json:"sdp_offer"`
 	}
@@ -30,12 +28,12 @@ func (a *App) InitiateOutgoingCall(r *fastglue.Request) error {
 		return nil
 	}
 
-	if req.ContactPhone == "" || req.WhatsAppAccount == "" || req.SDPOffer == "" {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "contact_phone, whatsapp_account, and sdp_offer are required", nil, "")
+	if req.ContactID == "" || req.WhatsAppAccount == "" || req.SDPOffer == "" {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "contact_id, whatsapp_account, and sdp_offer are required", nil, "")
 	}
 
-	if a.CallManager == nil {
-		return r.SendErrorEnvelope(fasthttp.StatusServiceUnavailable, "Calling is not enabled", nil, "")
+	if !a.IsCallingEnabledForOrg(orgID) {
+		return r.SendErrorEnvelope(fasthttp.StatusServiceUnavailable, "Calling is not enabled for this organization", nil, "")
 	}
 
 	// Look up account
@@ -45,9 +43,14 @@ func (a *App) InitiateOutgoingCall(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "WhatsApp account not found", nil, "")
 	}
 
-	// Look up contact by phone
+	// Look up contact by ID
+	contactID, parseErr := uuid.Parse(req.ContactID)
+	if parseErr != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact_id", nil, "")
+	}
+
 	var contact models.Contact
-	if err := a.DB.Where("organization_id = ? AND phone_number = ?", orgID, req.ContactPhone).
+	if err := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID).
 		First(&contact).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
 	}
@@ -61,7 +64,7 @@ func (a *App) InitiateOutgoingCall(r *fastglue.Request) error {
 
 	callLogID, sdpAnswer, err := a.CallManager.InitiateOutgoingCall(
 		orgID, userID, contact.ID,
-		req.ContactPhone, req.WhatsAppAccount,
+		contact.PhoneNumber, req.WhatsAppAccount,
 		waAccount, req.SDPOffer,
 	)
 	if err != nil {
@@ -123,6 +126,10 @@ func (a *App) SendCallPermissionRequest(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "contact_id and whatsapp_account are required", nil, "")
 	}
 
+	if !a.IsCallingEnabledForOrg(orgID) {
+		return r.SendErrorEnvelope(fasthttp.StatusServiceUnavailable, "Calling is not enabled for this organization", nil, "")
+	}
+
 	contactID, parseErr := uuid.Parse(req.ContactID)
 	if parseErr != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact_id", nil, "")
@@ -176,7 +183,8 @@ func (a *App) SendCallPermissionRequest(r *fastglue.Request) error {
 	})
 }
 
-// GetCallPermission handles GET /api/calls/permission/{contactId}
+// GetCallPermission handles GET /api/calls/permission/{contactId}?whatsapp_account=X
+// Checks call permission state directly via WhatsApp API.
 func (a *App) GetCallPermission(r *fastglue.Request) error {
 	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
@@ -191,20 +199,42 @@ func (a *App) GetCallPermission(r *fastglue.Request) error {
 		return nil
 	}
 
-	var permission models.CallPermission
-	if err := a.DB.Where("organization_id = ? AND contact_id = ?", orgID, contactID).
-		Order("created_at DESC").
-		First(&permission).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "No permission found for contact", nil, "")
+	accountName := string(r.RequestCtx.QueryArgs().Peek("whatsapp_account"))
+	if accountName == "" {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "whatsapp_account query param is required", nil, "")
 	}
 
-	// Check if permission has expired (72h from responded_at)
-	if permission.Status == models.CallPermissionAccepted && permission.RespondedAt != nil {
-		if time.Since(*permission.RespondedAt) > 72*time.Hour {
-			permission.Status = models.CallPermissionExpired
-			a.DB.Model(&permission).Update("status", models.CallPermissionExpired)
-		}
+	// Look up contact
+	var contact models.Contact
+	if err := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID).First(&contact).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
 	}
 
-	return r.SendEnvelope(permission)
+	// Look up WhatsApp account
+	var account models.WhatsAppAccount
+	if err := a.DB.Where("organization_id = ? AND name = ?", orgID, accountName).First(&account).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "WhatsApp account not found", nil, "")
+	}
+
+	waAccount := &whatsapp.Account{
+		PhoneID:     account.PhoneID,
+		BusinessID:  account.BusinessID,
+		APIVersion:  account.APIVersion,
+		AccessToken: account.AccessToken,
+	}
+
+	// Check permission via WhatsApp API
+	ctx := r.RequestCtx
+	status, err := a.WhatsApp.GetCallPermission(ctx, waAccount, contact.PhoneNumber)
+	if err != nil {
+		a.Log.Error("Failed to check call permission via API", "error", err, "phone", contact.PhoneNumber)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to check permission", nil, "")
+	}
+
+	a.Log.Info("Call permission check result", "contact_id", contactID, "phone", contact.PhoneNumber, "status", status)
+
+	return r.SendEnvelope(map[string]string{
+		"status": status,
+	})
 }
+

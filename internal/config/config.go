@@ -23,15 +23,23 @@ type Config struct {
 	RateLimit     RateLimitConfig     `koanf:"rate_limit"`
 	Cookie        CookieConfig        `koanf:"cookie"`
 	Calling       CallingConfig       `koanf:"calling"`
+	TTS           TTSConfig           `koanf:"tts"`
+}
+
+type TTSConfig struct {
+	PiperBinary   string `koanf:"piper_binary"`   // path to piper executable
+	PiperModel    string `koanf:"piper_model"`    // path to .onnx voice model
+	OpusencBinary string `koanf:"opusenc_binary"` // path to opusenc (defaults to "opusenc")
 }
 
 type CallingConfig struct {
-	Enabled             bool   `koanf:"enabled"`
 	MaxCallDuration     int    `koanf:"max_call_duration"`
 	AudioDir            string `koanf:"audio_dir"`
 	HoldMusicFile       string `koanf:"hold_music_file"`
 	TransferTimeoutSecs int    `koanf:"transfer_timeout_secs"`
 	RingbackFile        string `koanf:"ringback_file"`
+	UDPPortMin          uint16 `koanf:"udp_port_min"` // WebRTC UDP port range start (default: 10000)
+	UDPPortMax          uint16 `koanf:"udp_port_max"` // WebRTC UDP port range end (default: 10100)
 }
 
 type AppConfig struct {

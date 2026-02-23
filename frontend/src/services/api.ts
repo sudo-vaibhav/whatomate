@@ -568,6 +568,9 @@ export const organizationService = {
     timezone?: string
     date_format?: string
     name?: string
+    calling_enabled?: boolean
+    max_call_duration?: number
+    transfer_timeout_secs?: number
   }) => api.put('/org/settings', data)
 }
 
@@ -856,6 +859,7 @@ export interface IVRMenuOption {
 
 export interface IVRMenu {
   greeting: string
+  greeting_text?: string
   options: Record<string, IVRMenuOption>
   timeout_seconds?: number
   max_retries?: number
@@ -924,14 +928,14 @@ export interface CallPermission {
 }
 
 export const outgoingCallsService = {
-  initiate: (data: { contact_phone: string; whatsapp_account: string; sdp_offer: string }) =>
+  initiate: (data: { contact_id: string; whatsapp_account: string; sdp_offer: string }) =>
     api.post<{ call_log_id: string; sdp_answer: string }>('/calls/outgoing', data),
   hangup: (callLogId: string) =>
     api.post(`/calls/outgoing/${callLogId}/hangup`),
   requestPermission: (data: { contact_id: string; whatsapp_account: string }) =>
     api.post<{ permission_id: string }>('/calls/permission-request', data),
-  getPermission: (contactId: string) =>
-    api.get<CallPermission>(`/calls/permission/${contactId}`),
+  getPermission: (contactId: string, whatsappAccount: string) =>
+    api.get<CallPermission>(`/calls/permission/${contactId}`, { params: { whatsapp_account: whatsappAccount } }),
 }
 
 export const callLogsService = {
@@ -963,9 +967,13 @@ export const ivrFlowsService = {
     const formData = new FormData()
     formData.append('file', file)
     const csrfToken = getCookie('whm_csrf')
+    const headers: Record<string, string> = {}
+    if (csrfToken) headers['X-CSRF-Token'] = csrfToken
+    const selectedOrgId = localStorage.getItem('selected_organization_id')
+    if (selectedOrgId) headers['X-Organization-ID'] = selectedOrgId
     return axios.post(`${api.defaults.baseURL}/ivr-flows/audio`, formData, {
       withCredentials: true,
-      headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
+      headers,
     })
   },
   getAudioUrl: (filename: string) => `${api.defaults.baseURL}/ivr-flows/audio/${encodeURIComponent(filename)}`

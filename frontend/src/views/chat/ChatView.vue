@@ -1486,6 +1486,7 @@ async function sendMediaMessage() {
           <div class="flex items-center gap-1">
             <CallButton
               v-if="contactsStore.currentContact?.phone_number && selectedAccount"
+              :contact-id="contactsStore.currentContact.id"
               :contact-phone="contactsStore.currentContact.phone_number"
               :contact-name="contactsStore.currentContact.name || contactsStore.currentContact.phone_number"
               :whatsapp-account="selectedAccount"

@@ -13,6 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/shridarpatil/whatomate/internal/calling"
 	"github.com/shridarpatil/whatomate/internal/config"
+	"github.com/shridarpatil/whatomate/internal/tts"
 	"github.com/shridarpatil/whatomate/internal/database"
 	"github.com/shridarpatil/whatomate/internal/frontend"
 	"github.com/shridarpatil/whatomate/internal/handlers"
@@ -196,10 +197,19 @@ func runServer(args []string) {
 		HTTPClient: httpClient,
 	}
 
-	// Initialize CallManager if calling is enabled
-	if cfg.Calling.Enabled {
-		app.CallManager = calling.NewManager(&cfg.Calling, db, waClient, wsHub, lo)
-		lo.Info("Call manager initialized (calling enabled)")
+	// Initialize CallManager (per-org calling_enabled DB setting controls access)
+	app.CallManager = calling.NewManager(&cfg.Calling, db, waClient, wsHub, lo)
+	lo.Info("Call manager initialized")
+
+	// Initialize TTS if configured (requires piper binary + model)
+	if cfg.TTS.PiperBinary != "" && cfg.TTS.PiperModel != "" {
+		app.TTS = &tts.PiperTTS{
+			BinaryPath:    cfg.TTS.PiperBinary,
+			ModelPath:     cfg.TTS.PiperModel,
+			OpusencBinary: cfg.TTS.OpusencBinary,
+			AudioDir:      cfg.Calling.AudioDir,
+		}
+		lo.Info("TTS initialized", "piper", cfg.TTS.PiperBinary, "model", cfg.TTS.PiperModel)
 	}
 
 	// Start campaign stats subscriber for real-time WebSocket updates from worker

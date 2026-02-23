@@ -520,7 +520,17 @@
     "save": "Save Changes",
     "saved": "Settings saved",
     "generalSaved": "General settings saved",
-    "notificationsSaved": "Notification settings saved"
+    "notificationsSaved": "Notification settings saved",
+    "calling": "Calling",
+    "callingSettings": "Voice Calling",
+    "callingSettingsDesc": "Configure WhatsApp voice calling for this organization",
+    "callingEnabled": "Enable Calling",
+    "callingEnabledDesc": "Allow agents to make and receive voice calls via WhatsApp",
+    "maxCallDuration": "Max Call Duration (seconds)",
+    "maxCallDurationDesc": "Maximum allowed call duration before auto-disconnect",
+    "transferTimeout": "Transfer Timeout (seconds)",
+    "transferTimeoutDesc": "How long to wait for an agent to accept a transferred call",
+    "callingSaved": "Calling settings saved"
   },
   "users": {
     "title": "User Management",
@@ -2131,7 +2141,10 @@
     "optionLabel": "Label (e.g., Sales)",
     "transferTarget": "Transfer target (team ID)",
     "noOptions": "No menu options. Click \"Add Option\" to create one.",
-    "selectTargetFlow": "Select IVR flow"
+    "selectTargetFlow": "Select IVR flow",
+    "uploadAudioTab": "Upload Audio",
+    "textToSpeechTab": "Text to Speech",
+    "greetingTextPlaceholder": "Type your IVR greeting message..."
   },
   "callTransfers": {
     "title": "Call Transfers",
@@ -2167,6 +2180,8 @@
     "permissionAccepted": "Permission granted",
     "permissionDeclined": "Permission declined",
     "noPermission": "No call permission for this contact",
-    "callFailed": "Failed to initiate call"
+    "callFailed": "Failed to initiate call",
+    "permissionSent": "Call permission request sent",
+    "permissionSentDesc": "The contact needs to accept the call permission on WhatsApp before you can call them. Try again after they accept."
   }
 }

@@ -341,7 +341,7 @@ func (m *Manager) HandleOutgoingCallWebhook(callID, event, sdpAnswer string) {
 			"contact_phone": session.TargetPhone,
 		})
 
-	case "accepted", "in_call":
+	case "accepted", "in_call", "connect":
 		session.mu.Lock()
 		session.Status = models.CallStatusAnswered
 		session.mu.Unlock()
@@ -378,7 +378,7 @@ func (m *Manager) HandleOutgoingCallWebhook(callID, event, sdpAnswer string) {
 
 		m.cleanupSession(callID)
 
-	case "ended", "terminated":
+	case "ended", "terminated", "terminate":
 		// Calculate duration
 		var callLog models.CallLog
 		if err := m.db.Where("id = ?", session.CallLogID).First(&callLog).Error; err == nil {

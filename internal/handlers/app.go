@@ -11,6 +11,7 @@ import (
 	"github.com/shridarpatil/whatomate/internal/calling"
 	"github.com/shridarpatil/whatomate/internal/config"
 	"github.com/shridarpatil/whatomate/internal/queue"
+	"github.com/shridarpatil/whatomate/internal/tts"
 	"github.com/shridarpatil/whatomate/internal/websocket"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 	"github.com/valyala/fasthttp"
@@ -33,6 +34,8 @@ type App struct {
 	HTTPClient *http.Client
 	// CallManager handles WebRTC call sessions (nil when calling is disabled)
 	CallManager *calling.Manager
+	// TTS generates audio from text for IVR greetings (nil when not configured)
+	TTS *tts.PiperTTS
 	// wg tracks background goroutines for graceful shutdown
 	wg sync.WaitGroup
 }
