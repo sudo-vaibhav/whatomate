@@ -7,9 +7,9 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Phone, PhoneIncoming, PhoneOutgoing, PhoneOff, PhoneMissed, Clock, RefreshCw, Mic } from 'lucide-vue-next'
+import DataTable, { type Column } from '@/components/shared/DataTable.vue'
 
 const { t } = useI18n()
 const store = useCallingStore()
@@ -20,6 +20,7 @@ const accountFilter = ref('all')
 const directionFilter = ref('all')
 const ivrFlowFilter = ref('all')
 const currentPage = ref(1)
+const pageSize = 20
 const accounts = ref<{ name: string }[]>([])
 const ivrFlows = ref<IVRFlow[]>([])
 
@@ -39,7 +40,15 @@ const statusOptions = [
   { value: 'failed', label: t('calling.failed') }
 ]
 
-const totalPages = computed(() => Math.ceil(store.callLogsTotal / store.callLogsLimit) || 1)
+const columns = computed<Column<CallLog>[]>(() => [
+  { key: 'caller', label: t('calling.caller') },
+  { key: 'direction', label: t('calling.direction') },
+  { key: 'status', label: t('calling.status') },
+  { key: 'duration', label: t('calling.duration') },
+  { key: 'ivr_flow', label: t('calling.ivrFlow') },
+  { key: 'whatsapp_account', label: t('calling.account') },
+  { key: 'started_at', label: t('calling.time') },
+])
 
 function fetchLogs() {
   store.fetchCallLogs({
@@ -48,8 +57,13 @@ function fetchLogs() {
     direction: directionFilter.value !== 'all' ? directionFilter.value : undefined,
     ivr_flow_id: ivrFlowFilter.value !== 'all' ? ivrFlowFilter.value : undefined,
     page: currentPage.value,
-    limit: store.callLogsLimit
+    limit: pageSize
   })
+}
+
+function handlePageChange(page: number) {
+  currentPage.value = page
+  fetchLogs()
 }
 
 function viewDetail(log: CallLog) {
@@ -134,8 +148,6 @@ watch([statusFilter, accountFilter, directionFilter, ivrFlowFilter], () => {
   currentPage.value = 1
   fetchLogs()
 })
-
-watch(currentPage, () => fetchLogs())
 </script>
 
 <template>
@@ -206,84 +218,58 @@ watch(currentPage, () => fetchLogs())
 
     <!-- Table -->
     <Card>
-      <CardContent class="p-0 overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{{ t('calling.caller') }}</TableHead>
-              <TableHead>{{ t('calling.direction') }}</TableHead>
-              <TableHead>{{ t('calling.status') }}</TableHead>
-              <TableHead>{{ t('calling.duration') }}</TableHead>
-              <TableHead>{{ t('calling.ivrFlow') }}</TableHead>
-              <TableHead>{{ t('calling.account') }}</TableHead>
-              <TableHead>{{ t('calling.time') }}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow
-              v-for="log in store.callLogs"
-              :key="log.id"
-              class="cursor-pointer hover:bg-muted/50"
-              @click="viewDetail(log)"
-            >
-              <TableCell>
-                <div>
-                  <p class="font-medium">{{ log.contact?.profile_name || log.caller_phone }}</p>
-                  <p v-if="log.contact?.profile_name" class="text-sm text-muted-foreground">{{ log.caller_phone }}</p>
-                </div>
-              </TableCell>
-              <TableCell>
-                <span class="inline-flex items-center gap-1.5 text-muted-foreground">
-                  <PhoneIncoming v-if="log.direction === 'incoming'" class="h-3.5 w-3.5" />
-                  <PhoneOutgoing v-else class="h-3.5 w-3.5" />
-                  {{ t(`calling.${log.direction}`) }}
-                </span>
-              </TableCell>
-              <TableCell>
-                <Badge :variant="statusVariant(log.status)">
-                  <component :is="statusIcon(log.status)" class="h-3 w-3 mr-1" />
-                  {{ t(`calling.${log.status}`) }}
-                </Badge>
-              </TableCell>
-              <TableCell>
-                <span class="inline-flex items-center gap-1.5">
-                  {{ formatDuration(log.duration) }}
-                  <Mic v-if="log.recording_s3_key" class="h-3.5 w-3.5 text-muted-foreground" :title="t('calling.recording')" />
-                </span>
-              </TableCell>
-              <TableCell>{{ log.ivr_flow?.name || '-' }}</TableCell>
-              <TableCell>{{ log.whatsapp_account }}</TableCell>
-              <TableCell>{{ formatDate(log.started_at || log.created_at) }}</TableCell>
-            </TableRow>
-            <TableRow v-if="!store.callLogsLoading && store.callLogs.length === 0">
-              <TableCell :colspan="7" class="text-center py-8 text-muted-foreground">
-                {{ t('calling.noCallLogs') }}
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-
-        <!-- Loading -->
-        <div v-if="store.callLogsLoading" class="flex justify-center py-8">
-          <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
-        </div>
+      <CardContent class="p-0">
+        <DataTable
+          :items="store.callLogs"
+          :columns="columns"
+          :is-loading="store.callLogsLoading"
+          :empty-icon="Phone"
+          :empty-title="t('calling.noCallLogs')"
+          server-pagination
+          :current-page="currentPage"
+          :total-items="store.callLogsTotal"
+          :page-size="pageSize"
+          item-name="call logs"
+          max-height="calc(100vh - 320px)"
+          @page-change="handlePageChange"
+        >
+          <template #cell-caller="{ item: log }">
+            <div class="cursor-pointer" @click="viewDetail(log)">
+              <p class="font-medium">{{ log.contact?.profile_name || log.caller_phone }}</p>
+              <p v-if="log.contact?.profile_name" class="text-sm text-muted-foreground">{{ log.caller_phone }}</p>
+            </div>
+          </template>
+          <template #cell-direction="{ item: log }">
+            <span class="inline-flex items-center gap-1.5 text-muted-foreground">
+              <PhoneIncoming v-if="log.direction === 'incoming'" class="h-3.5 w-3.5" />
+              <PhoneOutgoing v-else class="h-3.5 w-3.5" />
+              {{ t(`calling.${log.direction}`) }}
+            </span>
+          </template>
+          <template #cell-status="{ item: log }">
+            <Badge :variant="statusVariant(log.status)">
+              <component :is="statusIcon(log.status)" class="h-3 w-3 mr-1" />
+              {{ t(`calling.${log.status}`) }}
+            </Badge>
+          </template>
+          <template #cell-duration="{ item: log }">
+            <span class="inline-flex items-center gap-1.5">
+              {{ formatDuration(log.duration) }}
+              <Mic v-if="log.recording_s3_key" class="h-3.5 w-3.5 text-muted-foreground" :title="t('calling.recording')" />
+            </span>
+          </template>
+          <template #cell-ivr_flow="{ item: log }">
+            {{ log.ivr_flow?.name || '-' }}
+          </template>
+          <template #cell-whatsapp_account="{ item: log }">
+            {{ log.whatsapp_account }}
+          </template>
+          <template #cell-started_at="{ item: log }">
+            {{ formatDate(log.started_at || log.created_at) }}
+          </template>
+        </DataTable>
       </CardContent>
     </Card>
-
-    <!-- Pagination -->
-    <div v-if="totalPages > 1" class="flex items-center justify-between">
-      <p class="text-sm text-muted-foreground">
-        {{ t('calling.showing', { from: (currentPage - 1) * store.callLogsLimit + 1, to: Math.min(currentPage * store.callLogsLimit, store.callLogsTotal), total: store.callLogsTotal }) }}
-      </p>
-      <div class="flex gap-2">
-        <Button variant="outline" size="sm" :disabled="currentPage <= 1" @click="currentPage--">
-          {{ t('common.back') }}
-        </Button>
-        <Button variant="outline" size="sm" :disabled="currentPage >= totalPages" @click="currentPage++">
-          {{ t('common.next') }}
-        </Button>
-      </div>
-    </div>
 
     <!-- Detail Dialog -->
     <Dialog v-model:open="showDetail">

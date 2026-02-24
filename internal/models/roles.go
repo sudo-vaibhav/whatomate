@@ -288,8 +288,7 @@ func SystemRolePermissions() map[string][]string {
 		"transfers:read", "transfers:write", "transfers:pickup",
 		// Canned Responses (read only)
 		"canned_responses:read",
-		// Call Logs (read only)
-		"call_logs:read",
+		// Call Logs: agents see only their own (no call_logs:read permission)
 		// Call Transfers
 		"call_transfers:read", "call_transfers:write",
 		// Outgoing Calls

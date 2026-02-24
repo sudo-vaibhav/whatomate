@@ -7,9 +7,9 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Phone, PhoneOff, PhoneForwarded, RefreshCw, Clock } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+import DataTable, { type Column } from '@/components/shared/DataTable.vue'
 
 const { t } = useI18n()
 const store = useCallingStore()
@@ -19,13 +19,27 @@ const historyTransfers = ref<CallTransfer[]>([])
 const historyTotal = ref(0)
 const historyPage = ref(1)
 const historyLoading = ref(false)
+const pageSize = 20
 
-const historyPages = computed(() => Math.ceil(historyTotal.value / 20) || 1)
+const waitingColumns = computed<Column<CallTransfer>[]>(() => [
+  { key: 'caller_phone', label: t('callTransfers.callerPhone') },
+  { key: 'status', label: t('common.status') },
+  { key: 'transferred_at', label: t('callTransfers.transferredAt') },
+  { key: 'actions', label: t('common.actions') },
+])
+
+const historyColumns = computed<Column<CallTransfer>[]>(() => [
+  { key: 'caller_phone', label: t('callTransfers.callerPhone') },
+  { key: 'status', label: t('common.status') },
+  { key: 'hold_duration', label: t('callTransfers.holdDuration') },
+  { key: 'talk_duration', label: t('callTransfers.talkDuration') },
+  { key: 'transferred_at', label: t('callTransfers.transferredAt') },
+])
 
 async function fetchHistory() {
   historyLoading.value = true
   try {
-    const response = await callTransfersService.list({ page: historyPage.value, limit: 20 })
+    const response = await callTransfersService.list({ page: historyPage.value, limit: pageSize })
     const data = response.data as any
     historyTransfers.value = (data.data?.call_transfers ?? data.call_transfers ?? [])
       .filter((t: CallTransfer) => t.status !== 'waiting')
@@ -35,6 +49,11 @@ async function fetchHistory() {
   } finally {
     historyLoading.value = false
   }
+}
+
+function handleHistoryPageChange(page: number) {
+  historyPage.value = page
+  fetchHistory()
 }
 
 async function handleAccept(id: string) {
@@ -103,47 +122,38 @@ onMounted(() => {
       <TabsContent value="waiting" class="mt-4">
         <Card>
           <CardContent class="p-0">
-            <div v-if="store.waitingTransfers.length === 0" class="flex flex-col items-center justify-center py-12 text-zinc-400">
-              <PhoneForwarded class="h-12 w-12 mb-3 opacity-50" />
-              <p>{{ t('callTransfers.noWaiting') }}</p>
-            </div>
-
-            <Table v-else>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{{ t('callTransfers.callerPhone') }}</TableHead>
-                  <TableHead>{{ t('common.status') }}</TableHead>
-                  <TableHead>{{ t('callTransfers.transferredAt') }}</TableHead>
-                  <TableHead>{{ t('common.actions') }}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow v-for="transfer in store.waitingTransfers" :key="transfer.id">
-                  <TableCell>
-                    <div class="flex items-center gap-2">
-                      <Phone class="h-4 w-4 text-green-400" />
-                      <span>{{ transfer.contact?.profile_name || transfer.caller_phone }}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="default" class="bg-yellow-600/20 text-yellow-400 border-yellow-600/30">
-                      {{ t('callTransfers.waiting') }}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{{ formatDate(transfer.transferred_at) }}</TableCell>
-                  <TableCell>
-                    <Button
-                      size="sm"
-                      class="bg-green-600 hover:bg-green-500 text-white"
-                      @click="handleAccept(transfer.id)"
-                    >
-                      <Phone class="h-3.5 w-3.5 mr-1" />
-                      {{ t('callTransfers.accept') }}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
+            <DataTable
+              :items="store.waitingTransfers"
+              :columns="waitingColumns"
+              :is-loading="false"
+              :empty-icon="PhoneForwarded"
+              :empty-title="t('callTransfers.noWaiting')"
+            >
+              <template #cell-caller_phone="{ item: transfer }">
+                <div class="flex items-center gap-2">
+                  <Phone class="h-4 w-4 text-green-400" />
+                  <span>{{ transfer.contact?.profile_name || transfer.caller_phone }}</span>
+                </div>
+              </template>
+              <template #cell-status>
+                <Badge variant="default" class="bg-yellow-600/20 text-yellow-400 border-yellow-600/30">
+                  {{ t('callTransfers.waiting') }}
+                </Badge>
+              </template>
+              <template #cell-transferred_at="{ item: transfer }">
+                {{ formatDate(transfer.transferred_at) }}
+              </template>
+              <template #cell-actions="{ item: transfer }">
+                <Button
+                  size="sm"
+                  class="bg-green-600 hover:bg-green-500 text-white"
+                  @click="handleAccept(transfer.id)"
+                >
+                  <Phone class="h-3.5 w-3.5 mr-1" />
+                  {{ t('callTransfers.accept') }}
+                </Button>
+              </template>
+            </DataTable>
           </CardContent>
         </Card>
       </TabsContent>
@@ -151,68 +161,44 @@ onMounted(() => {
       <TabsContent value="history" class="mt-4">
         <Card>
           <CardContent class="p-0">
-            <div v-if="historyLoading" class="flex items-center justify-center py-12 text-zinc-400">
-              <RefreshCw class="h-5 w-5 animate-spin mr-2" />
-              {{ t('common.loading') }}
-            </div>
-
-            <div v-else-if="historyTransfers.length === 0" class="flex flex-col items-center justify-center py-12 text-zinc-400">
-              <Clock class="h-12 w-12 mb-3 opacity-50" />
-              <p>{{ t('common.noResults') }}</p>
-            </div>
-
-            <Table v-else>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{{ t('callTransfers.callerPhone') }}</TableHead>
-                  <TableHead>{{ t('common.status') }}</TableHead>
-                  <TableHead>{{ t('callTransfers.holdDuration') }}</TableHead>
-                  <TableHead>{{ t('callTransfers.talkDuration') }}</TableHead>
-                  <TableHead>{{ t('callTransfers.transferredAt') }}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow v-for="transfer in historyTransfers" :key="transfer.id">
-                  <TableCell>
-                    <div class="flex items-center gap-2">
-                      <component :is="transfer.status === 'completed' ? Phone : PhoneOff"
-                        class="h-4 w-4"
-                        :class="transfer.status === 'completed' ? 'text-green-400' : 'text-red-400'"
-                      />
-                      <span>{{ transfer.contact?.profile_name || transfer.caller_phone }}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge :variant="statusVariant(transfer.status)">
-                      {{ transfer.status }}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{{ formatDuration(transfer.hold_duration) }}</TableCell>
-                  <TableCell>{{ formatDuration(transfer.talk_duration) }}</TableCell>
-                  <TableCell>{{ formatDate(transfer.transferred_at) }}</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-
-            <div v-if="historyPages > 1" class="flex items-center justify-between p-4 border-t border-zinc-800">
-              <Button
-                variant="outline"
-                size="sm"
-                :disabled="historyPage <= 1"
-                @click="historyPage--; fetchHistory()"
-              >
-                {{ t('common.back') }}
-              </Button>
-              <span class="text-sm text-zinc-400">{{ historyPage }} / {{ historyPages }}</span>
-              <Button
-                variant="outline"
-                size="sm"
-                :disabled="historyPage >= historyPages"
-                @click="historyPage++; fetchHistory()"
-              >
-                {{ t('common.next') }}
-              </Button>
-            </div>
+            <DataTable
+              :items="historyTransfers"
+              :columns="historyColumns"
+              :is-loading="historyLoading"
+              :empty-icon="Clock"
+              :empty-title="t('common.noResults')"
+              server-pagination
+              :current-page="historyPage"
+              :total-items="historyTotal"
+              :page-size="pageSize"
+              item-name="transfers"
+              max-height="calc(100vh - 320px)"
+              @page-change="handleHistoryPageChange"
+            >
+              <template #cell-caller_phone="{ item: transfer }">
+                <div class="flex items-center gap-2">
+                  <component :is="transfer.status === 'completed' ? Phone : PhoneOff"
+                    class="h-4 w-4"
+                    :class="transfer.status === 'completed' ? 'text-green-400' : 'text-red-400'"
+                  />
+                  <span>{{ transfer.contact?.profile_name || transfer.caller_phone }}</span>
+                </div>
+              </template>
+              <template #cell-status="{ item: transfer }">
+                <Badge :variant="statusVariant(transfer.status)">
+                  {{ transfer.status }}
+                </Badge>
+              </template>
+              <template #cell-hold_duration="{ item: transfer }">
+                {{ formatDuration(transfer.hold_duration) }}
+              </template>
+              <template #cell-talk_duration="{ item: transfer }">
+                {{ formatDuration(transfer.talk_duration) }}
+              </template>
+              <template #cell-transferred_at="{ item: transfer }">
+                {{ formatDate(transfer.transferred_at) }}
+              </template>
+            </DataTable>
           </CardContent>
         </Card>
       </TabsContent>

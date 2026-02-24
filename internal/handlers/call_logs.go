@@ -8,14 +8,12 @@ import (
 	"github.com/zerodha/fastglue"
 )
 
-// ListCallLogs returns call logs for the organization
+// ListCallLogs returns call logs for the organization.
+// Users with call_logs:read permission see all logs; others see only their own.
 func (a *App) ListCallLogs(r *fastglue.Request) error {
 	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-	if err := a.requirePermission(r, userID, models.ResourceCallLogs, models.ActionRead); err != nil {
-		return nil
 	}
 
 	pg := parsePagination(r)
@@ -31,6 +29,12 @@ func (a *App) ListCallLogs(r *fastglue.Request) error {
 		Order("call_logs.created_at DESC")
 
 	countQuery := a.DB.Model(&models.CallLog{}).Where("organization_id = ?", orgID)
+
+	// Users without call_logs:read permission only see their own call logs
+	if !a.HasPermission(userID, models.ResourceCallLogs, models.ActionRead, orgID) {
+		query = query.Where("call_logs.agent_id = ?", userID)
+		countQuery = countQuery.Where("agent_id = ?", userID)
+	}
 
 	if status != "" {
 		query = query.Where("call_logs.status = ?", status)
@@ -90,14 +94,12 @@ func (a *App) ListCallLogs(r *fastglue.Request) error {
 	})
 }
 
-// GetCallLog returns a single call log by ID
+// GetCallLog returns a single call log by ID.
+// Users without call_logs:read permission can only access their own call logs.
 func (a *App) GetCallLog(r *fastglue.Request) error {
 	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-	if err := a.requirePermission(r, userID, models.ResourceCallLogs, models.ActionRead); err != nil {
-		return nil
 	}
 
 	logID, err := parsePathUUID(r, "id", "call log")
@@ -105,11 +107,13 @@ func (a *App) GetCallLog(r *fastglue.Request) error {
 		return nil
 	}
 
+	query := a.DB.Where("id = ? AND organization_id = ?", logID, orgID)
+	if !a.HasPermission(userID, models.ResourceCallLogs, models.ActionRead, orgID) {
+		query = query.Where("agent_id = ?", userID)
+	}
+
 	var callLog models.CallLog
-	if err := a.DB.Where("id = ? AND organization_id = ?", logID, orgID).
-		Preload("Contact").
-		Preload("IVRFlow").
-		First(&callLog).Error; err != nil {
+	if err := query.Preload("Contact").Preload("IVRFlow").First(&callLog).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Call log not found", nil, "")
 	}
 
@@ -125,13 +129,11 @@ func (a *App) GetCallLog(r *fastglue.Request) error {
 }
 
 // GetCallRecording returns a presigned S3 URL for a call recording.
+// Users without call_logs:read permission can only access recordings for their own calls.
 func (a *App) GetCallRecording(r *fastglue.Request) error {
 	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-	if err := a.requirePermission(r, userID, models.ResourceCallLogs, models.ActionRead); err != nil {
-		return nil
 	}
 
 	if a.S3Client == nil {
@@ -143,9 +145,13 @@ func (a *App) GetCallRecording(r *fastglue.Request) error {
 		return nil
 	}
 
+	query := a.DB.Where("id = ? AND organization_id = ?", logID, orgID)
+	if !a.HasPermission(userID, models.ResourceCallLogs, models.ActionRead, orgID) {
+		query = query.Where("agent_id = ?", userID)
+	}
+
 	var callLog models.CallLog
-	if err := a.DB.Where("id = ? AND organization_id = ?", logID, orgID).
-		First(&callLog).Error; err != nil {
+	if err := query.First(&callLog).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Call log not found", nil, "")
 	}
 
