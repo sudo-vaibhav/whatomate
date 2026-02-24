@@ -278,10 +278,12 @@ func (m *Manager) completeTransferConnection(session *CallSession, transferID, a
 		"agent_id", agentID,
 	)
 
-	// Start audio bridge (blocks until stopped)
-	bridge := NewAudioBridge()
+	// Create recorder and start audio bridge (blocks until stopped)
+	recorder := m.newRecorderIfEnabled()
+	bridge := NewAudioBridge(recorder)
 	session.mu.Lock()
 	session.Bridge = bridge
+	session.Recorder = recorder
 	session.mu.Unlock()
 
 	bridge.Start(callerRemote, agentLocal, agentRemoteTrack, callerLocal)

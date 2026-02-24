@@ -835,6 +835,8 @@ export interface CallLog {
   answered_at?: string
   ended_at?: string
   error_message?: string
+  recording_s3_key?: string
+  recording_duration?: number
   contact?: {
     id: string
     phone_number: string
@@ -873,6 +875,7 @@ export interface IVRFlow {
   name: string
   description: string
   is_active: boolean
+  is_call_start: boolean
   menu: IVRMenu
   welcome_audio_url: string
   created_at: string
@@ -941,9 +944,11 @@ export const outgoingCallsService = {
 }
 
 export const callLogsService = {
-  list: (params?: { status?: string; account?: string; contact_id?: string; from?: string; to?: string; page?: number; limit?: number }) =>
+  list: (params?: { status?: string; account?: string; contact_id?: string; direction?: string; ivr_flow_id?: string; from?: string; to?: string; page?: number; limit?: number }) =>
     api.get<{ call_logs: CallLog[]; total: number }>('/call-logs', { params }),
-  get: (id: string) => api.get<CallLog>(`/call-logs/${id}`)
+  get: (id: string) => api.get<CallLog>(`/call-logs/${id}`),
+  getRecordingURL: (id: string) =>
+    api.get<{ url: string; duration: number }>(`/call-logs/${id}/recording`)
 }
 
 export const callTransfersService = {
@@ -960,9 +965,9 @@ export const ivrFlowsService = {
   list: (params?: { search?: string; page?: number; limit?: number }) =>
     api.get<{ ivr_flows: IVRFlow[]; total: number }>('/ivr-flows', { params }),
   get: (id: string) => api.get<IVRFlow>(`/ivr-flows/${id}`),
-  create: (data: { whatsapp_account: string; name: string; description?: string; menu: IVRMenu; welcome_audio_url?: string }) =>
+  create: (data: { whatsapp_account: string; name: string; description?: string; is_call_start?: boolean; menu: IVRMenu; welcome_audio_url?: string }) =>
     api.post<IVRFlow>('/ivr-flows', data),
-  update: (id: string, data: { name?: string; description?: string; is_active?: boolean; menu?: IVRMenu; welcome_audio_url?: string }) =>
+  update: (id: string, data: { name?: string; description?: string; is_active?: boolean; is_call_start?: boolean; menu?: IVRMenu; welcome_audio_url?: string }) =>
     api.put<IVRFlow>(`/ivr-flows/${id}`, data),
   delete: (id: string) => api.delete(`/ivr-flows/${id}`),
   uploadAudio: (file: File) => {

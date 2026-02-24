@@ -46,7 +46,9 @@ type CallLog struct {
 	StartedAt       *time.Time    `json:"started_at,omitempty"`
 	AnsweredAt      *time.Time    `json:"answered_at,omitempty"`
 	EndedAt         *time.Time    `json:"ended_at,omitempty"`
-	ErrorMessage    string        `gorm:"type:text" json:"error_message,omitempty"`
+	ErrorMessage      string        `gorm:"type:text" json:"error_message,omitempty"`
+	RecordingS3Key    string        `gorm:"size:500" json:"recording_s3_key,omitempty"`
+	RecordingDuration int           `gorm:"default:0" json:"recording_duration,omitempty"`
 
 	// Relations
 	Contact *Contact `gorm:"foreignKey:ContactID" json:"contact,omitempty"`
@@ -65,7 +67,8 @@ type IVRFlow struct {
 	WhatsAppAccount string    `gorm:"column:whatsapp_account;size:100;not null" json:"whatsapp_account"`
 	Name            string    `gorm:"size:255;not null" json:"name"`
 	Description     string    `gorm:"type:text" json:"description"`
-	IsActive        bool      `gorm:"default:false" json:"is_active"`
+	IsActive        bool      `gorm:"default:true" json:"is_active"`
+	IsCallStart     bool      `gorm:"default:false" json:"is_call_start"`
 	Menu            JSONB     `gorm:"type:jsonb" json:"menu"`
 	WelcomeAudioURL string    `gorm:"type:text" json:"welcome_audio_url"`
 

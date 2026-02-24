@@ -79,6 +79,7 @@ audio_dir = "./audio"         # Directory for IVR audio files
 # hold_music_file = "hold_music.opus"
 # ringback_file = "ringback.opus"
 transfer_timeout_secs = 120   # How long to wait for agent to accept transfer
+recording_enabled = true      # Record calls to S3 (requires [storage] s3 config)
 udp_port_min = 10000          # WebRTC UDP port range start
 udp_port_max = 10100          # WebRTC UDP port range end
 # public_ip = "1.2.3.4"      # Public IP for NAT mapping (required on AWS/cloud)

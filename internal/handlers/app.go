@@ -11,6 +11,7 @@ import (
 	"github.com/shridarpatil/whatomate/internal/calling"
 	"github.com/shridarpatil/whatomate/internal/config"
 	"github.com/shridarpatil/whatomate/internal/queue"
+	"github.com/shridarpatil/whatomate/internal/storage"
 	"github.com/shridarpatil/whatomate/internal/tts"
 	"github.com/shridarpatil/whatomate/internal/websocket"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
@@ -36,6 +37,8 @@ type App struct {
 	CallManager *calling.Manager
 	// TTS generates audio from text for IVR greetings (nil when not configured)
 	TTS *tts.PiperTTS
+	// S3Client for serving call recording presigned URLs (nil when not configured)
+	S3Client *storage.S3Client
 	// wg tracks background goroutines for graceful shutdown
 	wg sync.WaitGroup
 }

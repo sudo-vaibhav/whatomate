@@ -2,6 +2,8 @@ package calling
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -9,6 +11,7 @@ import (
 	"github.com/pion/webrtc/v4"
 	"github.com/shridarpatil/whatomate/internal/config"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/storage"
 	"github.com/shridarpatil/whatomate/internal/websocket"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 	"github.com/zerodha/logf"
@@ -30,6 +33,9 @@ type CallSession struct {
 	IVRFlow         *models.IVRFlow
 	DTMFBuffer      chan byte
 	StartedAt       time.Time
+
+	// Recording
+	Recorder *CallRecorder
 
 	// Transfer fields
 	TransferID        uuid.UUID
@@ -83,10 +89,11 @@ type Manager struct {
 	db       *gorm.DB
 	wsHub    *websocket.Hub
 	config   *config.CallingConfig
+	s3       *storage.S3Client // nil when recording is disabled
 }
 
 // NewManager creates a new call session manager
-func NewManager(cfg *config.CallingConfig, db *gorm.DB, waClient *whatsapp.Client, wsHub *websocket.Hub, log logf.Logger) *Manager {
+func NewManager(cfg *config.CallingConfig, s3Client *storage.S3Client, db *gorm.DB, waClient *whatsapp.Client, wsHub *websocket.Hub, log logf.Logger) *Manager {
 	// Apply defaults for server-level config
 	if cfg.AudioDir == "" {
 		cfg.AudioDir = "./audio"
@@ -108,6 +115,7 @@ func NewManager(cfg *config.CallingConfig, db *gorm.DB, waClient *whatsapp.Clien
 		db:       db,
 		wsHub:    wsHub,
 		config:   cfg,
+		s3:       s3Client,
 	}
 }
 
@@ -272,5 +280,72 @@ func (m *Manager) cleanupSession(callID string) {
 		close(session.DTMFBuffer)
 	}
 
+	// Finalize recording (async — don't block cleanup)
+	if session.Recorder != nil {
+		recorder := session.Recorder
+		session.Recorder = nil
+		orgID := session.OrganizationID
+		callLogID := session.CallLogID
+		go m.finalizeRecording(orgID, callLogID, recorder)
+	}
+
 	m.log.Info("Call session cleaned up", "call_id", callID)
+}
+
+// newRecorderIfEnabled creates a CallRecorder if recording is enabled, or returns nil.
+func (m *Manager) newRecorderIfEnabled() *CallRecorder {
+	if !m.config.RecordingEnabled || m.s3 == nil {
+		return nil
+	}
+	rec, err := NewCallRecorder()
+	if err != nil {
+		m.log.Error("Failed to create call recorder", "error", err)
+		return nil
+	}
+	return rec
+}
+
+// finalizeRecording stops the recorder, uploads the OGG file to S3, and updates the CallLog.
+func (m *Manager) finalizeRecording(orgID, callLogID uuid.UUID, recorder *CallRecorder) {
+	path, packetCount := recorder.Stop()
+	defer os.Remove(path)
+
+	if packetCount == 0 {
+		return
+	}
+
+	// Calculate duration: each packet is 20ms, but both directions interleave,
+	// so actual call duration ≈ packetCount * 20ms / 2 (two directions).
+	durationSecs := (packetCount * 20) / 2 / 1000
+
+	s3Key := fmt.Sprintf("recordings/%s/%s.ogg", orgID.String(), callLogID.String())
+
+	f, err := os.Open(path)
+	if err != nil {
+		m.log.Error("Failed to open recording file", "error", err, "call_log_id", callLogID)
+		return
+	}
+	defer f.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	if err := m.s3.Upload(ctx, s3Key, f, "audio/ogg"); err != nil {
+		m.log.Error("Failed to upload recording to S3", "error", err, "call_log_id", callLogID)
+		return
+	}
+
+	m.db.Model(&models.CallLog{}).
+		Where("id = ?", callLogID).
+		Updates(map[string]any{
+			"recording_s3_key":    s3Key,
+			"recording_duration": durationSecs,
+		})
+
+	m.log.Info("Recording uploaded",
+		"call_log_id", callLogID,
+		"s3_key", s3Key,
+		"packets", packetCount,
+		"duration_secs", durationSecs,
+	)
 }

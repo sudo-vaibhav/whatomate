@@ -36,7 +36,7 @@ export const useCallingStore = defineStore('calling', () => {
   const outgoingContactPhone = ref<string>('')
 
   // Computed
-  const activeFlows = computed(() => ivrFlows.value.filter(f => f.is_active))
+  const activeFlows = computed(() => ivrFlows.value.filter(f => f.is_active && f.is_call_start))
   const isOutgoingCall = computed(() => outgoingCallLogId.value !== null)
 
   // Call Logs actions
@@ -44,6 +44,8 @@ export const useCallingStore = defineStore('calling', () => {
     status?: string
     account?: string
     contact_id?: string
+    direction?: string
+    ivr_flow_id?: string
     from?: string
     to?: string
     page?: number

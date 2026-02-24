@@ -484,9 +484,11 @@ func (m *Manager) startOutgoingBridge(
 		close(session.BridgeStarted)
 	}
 
-	bridge := NewAudioBridge()
+	recorder := m.newRecorderIfEnabled()
+	bridge := NewAudioBridge(recorder)
 	session.mu.Lock()
 	session.Bridge = bridge
+	session.Recorder = recorder
 	session.mu.Unlock()
 
 	m.log.Info("Starting outgoing call audio bridge", "call_id", session.ID)

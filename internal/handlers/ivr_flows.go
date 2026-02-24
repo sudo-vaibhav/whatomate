@@ -16,12 +16,13 @@ import (
 
 // IVRFlowRequest represents the request body for creating/updating an IVR flow
 type IVRFlowRequest struct {
-	WhatsAppAccount string      `json:"whatsapp_account"`
-	Name            string      `json:"name"`
-	Description     string      `json:"description"`
-	IsActive        bool        `json:"is_active"`
+	WhatsAppAccount string       `json:"whatsapp_account"`
+	Name            string       `json:"name"`
+	Description     string       `json:"description"`
+	IsActive        bool         `json:"is_active"`
+	IsCallStart     bool         `json:"is_call_start"`
 	Menu            models.JSONB `json:"menu"`
-	WelcomeAudioURL string      `json:"welcome_audio_url"`
+	WelcomeAudioURL string       `json:"welcome_audio_url"`
 }
 
 // ListIVRFlows returns all IVR flows for the organization
@@ -103,11 +104,11 @@ func (a *App) CreateIVRFlow(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "WhatsApp account is required", nil, "")
 	}
 
-	// If activating this flow, deactivate others for the same account
-	if req.IsActive {
+	// If marking this as call start, unset others for the same account
+	if req.IsCallStart {
 		a.DB.Model(&models.IVRFlow{}).
-			Where("organization_id = ? AND whatsapp_account = ? AND is_active = ?", orgID, req.WhatsAppAccount, true).
-			Update("is_active", false)
+			Where("organization_id = ? AND whatsapp_account = ? AND is_call_start = ?", orgID, req.WhatsAppAccount, true).
+			Update("is_call_start", false)
 	}
 
 	// Generate TTS audio for greeting_text fields in the menu tree
@@ -125,6 +126,7 @@ func (a *App) CreateIVRFlow(r *fastglue.Request) error {
 		Name:            req.Name,
 		Description:     req.Description,
 		IsActive:        req.IsActive,
+		IsCallStart:     req.IsCallStart,
 		Menu:            req.Menu,
 		WelcomeAudioURL: req.WelcomeAudioURL,
 	}
@@ -162,12 +164,12 @@ func (a *App) UpdateIVRFlow(r *fastglue.Request) error {
 		return nil
 	}
 
-	// If activating this flow, deactivate others for the same account
-	if req.IsActive && !flow.IsActive {
+	// If marking this as call start, unset others for the same account
+	if req.IsCallStart && !flow.IsCallStart {
 		a.DB.Model(&models.IVRFlow{}).
-			Where("organization_id = ? AND whatsapp_account = ? AND is_active = ? AND id != ?",
+			Where("organization_id = ? AND whatsapp_account = ? AND is_call_start = ? AND id != ?",
 				orgID, flow.WhatsAppAccount, true, flowID).
-			Update("is_active", false)
+			Update("is_call_start", false)
 	}
 
 	// Generate TTS audio for greeting_text fields in the menu tree
@@ -181,6 +183,7 @@ func (a *App) UpdateIVRFlow(r *fastglue.Request) error {
 		"name":              req.Name,
 		"description":       req.Description,
 		"is_active":         req.IsActive,
+		"is_call_start":     req.IsCallStart,
 		"menu":              req.Menu,
 		"welcome_audio_url": req.WelcomeAudioURL,
 	}

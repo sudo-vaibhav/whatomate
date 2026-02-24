@@ -86,7 +86,6 @@ func (m *Manager) runIVRFlow(session *CallSession, waAccount *whatsapp.Account) 
 		}
 
 		digitStr := string(digit)
-		ivrPath = append(ivrPath, map[string]string{"digit": digitStr, "menu": currentMenu.Greeting})
 
 		// Look up the option for this digit
 		option, exists := currentMenu.Options[digitStr]
@@ -95,6 +94,8 @@ func (m *Manager) runIVRFlow(session *CallSession, waAccount *whatsapp.Account) 
 			m.log.Info("Invalid IVR input", "call_id", session.ID, "digit", digitStr)
 			continue
 		}
+
+		ivrPath = append(ivrPath, map[string]string{"digit": digitStr, "label": option.Label})
 
 		m.log.Info("IVR option selected",
 			"call_id", session.ID,
@@ -144,6 +145,10 @@ func (m *Manager) runIVRFlow(session *CallSession, waAccount *whatsapp.Account) 
 				var targetFlow models.IVRFlow
 				if err := m.db.First(&targetFlow, targetFlowID).Error; err != nil {
 					m.log.Error("Failed to load goto_flow target", "error", err, "call_id", session.ID, "flow_id", option.Target)
+					continue
+				}
+				if !targetFlow.IsActive {
+					m.log.Warn("goto_flow target is disabled, skipping", "call_id", session.ID, "flow_id", option.Target)
 					continue
 				}
 

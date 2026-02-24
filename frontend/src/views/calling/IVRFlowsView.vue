@@ -33,7 +33,8 @@ const form = ref({
   description: '',
   whatsapp_account: '',
   welcome_audio_url: '',
-  is_active: false,
+  is_active: true,
+  is_call_start: false,
   menu: {
     greeting: '',
     options: {},
@@ -49,7 +50,8 @@ function resetForm() {
     description: '',
     whatsapp_account: accounts.value[0]?.name || '',
     welcome_audio_url: '',
-    is_active: false,
+    is_active: true,
+    is_call_start: false,
     menu: {
       greeting: '',
       options: {},
@@ -74,6 +76,7 @@ function openEdit(flow: IVRFlow) {
     whatsapp_account: flow.whatsapp_account,
     welcome_audio_url: flow.welcome_audio_url || '',
     is_active: flow.is_active,
+    is_call_start: flow.is_call_start,
     menu: flow.menu || {
       greeting: '',
       options: {},
@@ -107,6 +110,7 @@ async function saveFlow() {
         name: form.value.name,
         description: form.value.description,
         is_active: form.value.is_active,
+        is_call_start: form.value.is_call_start,
         menu: form.value.menu,
         welcome_audio_url: form.value.welcome_audio_url
       })
@@ -145,6 +149,15 @@ async function deleteFlow() {
 async function toggleActive(flow: IVRFlow) {
   try {
     await store.updateIVRFlow(flow.id, { is_active: !flow.is_active })
+    store.fetchIVRFlows()
+  } catch {
+    toast.error(t('calling.flowSaveFailed'))
+  }
+}
+
+async function toggleCallStart(flow: IVRFlow) {
+  try {
+    await store.updateIVRFlow(flow.id, { is_call_start: !flow.is_call_start })
     store.fetchIVRFlows()
   } catch {
     toast.error(t('calling.flowSaveFailed'))
@@ -205,13 +218,23 @@ onMounted(async () => {
               </TableCell>
               <TableCell>{{ flow.whatsapp_account }}</TableCell>
               <TableCell>
-                <Badge
-                  :variant="flow.is_active ? 'default' : 'secondary'"
-                  class="cursor-pointer"
-                  @click="toggleActive(flow)"
-                >
-                  {{ flow.is_active ? t('calling.active') : t('calling.inactive') }}
-                </Badge>
+                <div class="flex gap-1.5">
+                  <Badge
+                    :variant="flow.is_active ? 'default' : 'destructive'"
+                    class="cursor-pointer"
+                    @click="toggleActive(flow)"
+                  >
+                    {{ flow.is_active ? t('calling.enabled') : t('calling.disabled') }}
+                  </Badge>
+                  <Badge
+                    v-if="flow.is_active"
+                    :variant="flow.is_call_start ? 'default' : 'outline'"
+                    class="cursor-pointer"
+                    @click="toggleCallStart(flow)"
+                  >
+                    {{ flow.is_call_start ? t('calling.callStart') : t('calling.secondary') }}
+                  </Badge>
+                </div>
               </TableCell>
               <TableCell>
                 {{ Object.keys(flow.menu?.options || {}).length }} {{ t('calling.menuOptions') }}
@@ -285,9 +308,15 @@ onMounted(async () => {
             <Textarea v-model="form.description" :placeholder="t('calling.descriptionPlaceholder')" :rows="2" />
           </div>
 
-          <div class="flex items-center gap-2">
-            <Switch v-model:checked="form.is_active" />
-            <Label>{{ t('calling.activeToggle') }}</Label>
+          <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2">
+              <Switch v-model:checked="form.is_active" />
+              <Label>{{ t('calling.enabledToggle') }}</Label>
+            </div>
+            <div class="flex items-center gap-2">
+              <Switch v-model:checked="form.is_call_start" :disabled="!form.is_active" />
+              <Label>{{ t('calling.callStartToggle') }}</Label>
+            </div>
           </div>
 
           <div class="space-y-2">

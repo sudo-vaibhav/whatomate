@@ -2,14 +2,14 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCallingStore } from '@/stores/calling'
-import { accountsService, type CallLog } from '@/services/api'
+import { accountsService, callLogsService, ivrFlowsService, type CallLog, type IVRFlow } from '@/services/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Phone, PhoneOff, PhoneMissed, Clock, RefreshCw } from 'lucide-vue-next'
+import { Phone, PhoneIncoming, PhoneOutgoing, PhoneOff, PhoneMissed, Clock, RefreshCw, Mic } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const store = useCallingStore()
@@ -17,12 +17,17 @@ const store = useCallingStore()
 // Filters
 const statusFilter = ref('all')
 const accountFilter = ref('all')
+const directionFilter = ref('all')
+const ivrFlowFilter = ref('all')
 const currentPage = ref(1)
 const accounts = ref<{ name: string }[]>([])
+const ivrFlows = ref<IVRFlow[]>([])
 
 // Detail dialog
 const showDetail = ref(false)
 const selectedLog = ref<CallLog | null>(null)
+const recordingURL = ref<string | null>(null)
+const recordingLoading = ref(false)
 
 const statusOptions = [
   { value: 'all', label: t('calling.allStatuses') },
@@ -40,6 +45,8 @@ function fetchLogs() {
   store.fetchCallLogs({
     status: statusFilter.value !== 'all' ? statusFilter.value : undefined,
     account: accountFilter.value !== 'all' ? accountFilter.value : undefined,
+    direction: directionFilter.value !== 'all' ? directionFilter.value : undefined,
+    ivr_flow_id: ivrFlowFilter.value !== 'all' ? ivrFlowFilter.value : undefined,
     page: currentPage.value,
     limit: store.callLogsLimit
   })
@@ -48,6 +55,23 @@ function fetchLogs() {
 function viewDetail(log: CallLog) {
   selectedLog.value = log
   showDetail.value = true
+  recordingURL.value = null
+
+  // Fetch recording URL if recording exists
+  if (log.recording_s3_key) {
+    recordingLoading.value = true
+    callLogsService.getRecordingURL(log.id)
+      .then(res => {
+        const data = (res.data as any).data ?? res.data
+        recordingURL.value = data.url
+      })
+      .catch(() => {
+        recordingURL.value = null
+      })
+      .finally(() => {
+        recordingLoading.value = false
+      })
+  }
 }
 
 function formatDuration(seconds: number): string {
@@ -97,9 +121,16 @@ onMounted(async () => {
   } catch {
     // Ignore
   }
+  try {
+    const res = await ivrFlowsService.list()
+    const data = res.data as any
+    ivrFlows.value = data.data?.ivr_flows ?? data.ivr_flows ?? []
+  } catch {
+    // Ignore
+  }
 })
 
-watch([statusFilter, accountFilter], () => {
+watch([statusFilter, accountFilter, directionFilter, ivrFlowFilter], () => {
   currentPage.value = 1
   fetchLogs()
 })
@@ -135,6 +166,29 @@ watch(currentPage, () => fetchLogs())
             </SelectContent>
           </Select>
 
+          <Select v-model="directionFilter">
+            <SelectTrigger class="w-48">
+              <SelectValue :placeholder="t('calling.filterByDirection')" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{{ t('calling.allDirections') }}</SelectItem>
+              <SelectItem value="incoming">{{ t('calling.incoming') }}</SelectItem>
+              <SelectItem value="outgoing">{{ t('calling.outgoing') }}</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select v-model="ivrFlowFilter">
+            <SelectTrigger class="w-48">
+              <SelectValue :placeholder="t('calling.filterByIVRFlow')" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{{ t('calling.allIVRFlows') }}</SelectItem>
+              <SelectItem v-for="flow in ivrFlows" :key="flow.id" :value="flow.id">
+                {{ flow.name }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
           <Select v-model="accountFilter">
             <SelectTrigger class="w-48">
               <SelectValue :placeholder="t('calling.filterByAccount')" />
@@ -152,11 +206,12 @@ watch(currentPage, () => fetchLogs())
 
     <!-- Table -->
     <Card>
-      <CardContent class="p-0">
+      <CardContent class="p-0 overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>{{ t('calling.caller') }}</TableHead>
+              <TableHead>{{ t('calling.direction') }}</TableHead>
               <TableHead>{{ t('calling.status') }}</TableHead>
               <TableHead>{{ t('calling.duration') }}</TableHead>
               <TableHead>{{ t('calling.ivrFlow') }}</TableHead>
@@ -178,18 +233,30 @@ watch(currentPage, () => fetchLogs())
                 </div>
               </TableCell>
               <TableCell>
+                <span class="inline-flex items-center gap-1.5 text-muted-foreground">
+                  <PhoneIncoming v-if="log.direction === 'incoming'" class="h-3.5 w-3.5" />
+                  <PhoneOutgoing v-else class="h-3.5 w-3.5" />
+                  {{ t(`calling.${log.direction}`) }}
+                </span>
+              </TableCell>
+              <TableCell>
                 <Badge :variant="statusVariant(log.status)">
                   <component :is="statusIcon(log.status)" class="h-3 w-3 mr-1" />
                   {{ t(`calling.${log.status}`) }}
                 </Badge>
               </TableCell>
-              <TableCell>{{ formatDuration(log.duration) }}</TableCell>
+              <TableCell>
+                <span class="inline-flex items-center gap-1.5">
+                  {{ formatDuration(log.duration) }}
+                  <Mic v-if="log.recording_s3_key" class="h-3.5 w-3.5 text-muted-foreground" :title="t('calling.recording')" />
+                </span>
+              </TableCell>
               <TableCell>{{ log.ivr_flow?.name || '-' }}</TableCell>
               <TableCell>{{ log.whatsapp_account }}</TableCell>
               <TableCell>{{ formatDate(log.started_at || log.created_at) }}</TableCell>
             </TableRow>
             <TableRow v-if="!store.callLogsLoading && store.callLogs.length === 0">
-              <TableCell :colspan="6" class="text-center py-8 text-muted-foreground">
+              <TableCell :colspan="7" class="text-center py-8 text-muted-foreground">
                 {{ t('calling.noCallLogs') }}
               </TableCell>
             </TableRow>
@@ -234,6 +301,14 @@ watch(currentPage, () => fetchLogs())
               <p class="font-medium">{{ selectedLog.caller_phone }}</p>
             </div>
             <div>
+              <p class="text-muted-foreground">{{ t('calling.direction') }}</p>
+              <p class="font-medium inline-flex items-center gap-1.5">
+                <PhoneIncoming v-if="selectedLog.direction === 'incoming'" class="h-3.5 w-3.5" />
+                <PhoneOutgoing v-else class="h-3.5 w-3.5" />
+                {{ t(`calling.${selectedLog.direction}`) }}
+              </p>
+            </div>
+            <div>
               <p class="text-muted-foreground">{{ t('calling.status') }}</p>
               <Badge :variant="statusVariant(selectedLog.status)">
                 {{ t(`calling.${selectedLog.status}`) }}
@@ -271,9 +346,27 @@ watch(currentPage, () => fetchLogs())
                 class="flex items-center gap-2 text-sm"
               >
                 <Badge variant="outline" class="font-mono">{{ step.digit }}</Badge>
-                <span class="text-muted-foreground">{{ step.menu || t('calling.rootMenu') }}</span>
+                <span>{{ step.label || '-' }}</span>
               </div>
             </div>
+          </div>
+
+          <div v-if="selectedLog.recording_s3_key" class="space-y-2">
+            <p class="text-sm text-muted-foreground">{{ t('calling.recording') }}</p>
+            <div v-if="recordingLoading" class="flex items-center gap-2 text-sm text-muted-foreground">
+              <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+              {{ t('common.loading') }}
+            </div>
+            <audio
+              v-else-if="recordingURL"
+              :src="recordingURL"
+              controls
+              preload="none"
+              class="w-full"
+            />
+            <p v-if="selectedLog.recording_duration" class="text-xs text-muted-foreground">
+              {{ formatDuration(selectedLog.recording_duration) }}
+            </p>
           </div>
 
           <div v-if="selectedLog.error_message">

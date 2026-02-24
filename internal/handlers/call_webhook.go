@@ -153,14 +153,21 @@ func (a *App) processCallWebhook(phoneNumberID string, call interface{}) {
 		})
 
 	case "ended", "terminate":
-		// Calculate duration and update
+		// Calculate duration and determine final status.
+		// For incoming calls that were pre-accepted for WebRTC but never reached
+		// an agent (no transfer connected), mark as missed instead of completed.
 		duration := 0
 		if callLog.AnsweredAt != nil {
 			duration = int(now.Sub(*callLog.AnsweredAt).Seconds())
 		}
 
+		finalStatus := models.CallStatusCompleted
+		if callLog.Direction == models.CallDirectionIncoming && callLog.AgentID == nil {
+			finalStatus = models.CallStatusMissed
+		}
+
 		a.DB.Model(callLog).Updates(map[string]any{
-			"status":   models.CallStatusCompleted,
+			"status":   finalStatus,
 			"ended_at": now,
 			"duration": duration,
 		})
@@ -173,6 +180,7 @@ func (a *App) processCallWebhook(phoneNumberID string, call interface{}) {
 		a.broadcastCallEvent(account.OrganizationID, websocket.TypeCallEnded, map[string]any{
 			"call_id":    ce.ID,
 			"contact_id": contact.ID.String(),
+			"status":     string(finalStatus),
 			"duration":   duration,
 			"ended_at":   now.Format(time.RFC3339),
 		})
@@ -229,10 +237,10 @@ func (a *App) getOrCreateCallLog(account *models.WhatsAppAccount, contact *model
 		StartedAt:       &now,
 	}
 
-	// Find active IVR flow for this account
+	// Find the call-start IVR flow for this account (must also be enabled)
 	var ivrFlow models.IVRFlow
-	if err := a.DB.Where("organization_id = ? AND whatsapp_account = ? AND is_active = ? AND deleted_at IS NULL",
-		account.OrganizationID, account.Name, true).First(&ivrFlow).Error; err == nil {
+	if err := a.DB.Where("organization_id = ? AND whatsapp_account = ? AND is_call_start = ? AND is_active = ? AND deleted_at IS NULL",
+		account.OrganizationID, account.Name, true, true).First(&ivrFlow).Error; err == nil {
 		callLog.IVRFlowID = &ivrFlow.ID
 	}
 
@@ -260,8 +268,13 @@ func (a *App) handleOrphanedOutgoingCallEvent(phoneNumberID, callID, event strin
 
 	switch event {
 	case "terminate":
+		finalStatus := models.CallStatusCompleted
+		if callLog.AnsweredAt == nil {
+			finalStatus = models.CallStatusMissed
+		}
+
 		updates := map[string]any{
-			"status":   models.CallStatusCompleted,
+			"status":   finalStatus,
 			"ended_at": now,
 		}
 		if duration > 0 {
@@ -272,6 +285,7 @@ func (a *App) handleOrphanedOutgoingCallEvent(phoneNumberID, callID, event strin
 		a.broadcastCallEvent(callLog.OrganizationID, websocket.TypeOutgoingCallEnded, map[string]any{
 			"call_log_id": callLog.ID.String(),
 			"call_id":     callID,
+			"status":      string(finalStatus),
 			"duration":    duration,
 			"ended_at":    now.Format(time.RFC3339),
 		})
