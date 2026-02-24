@@ -10,16 +10,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Phone, PhoneIncoming, PhoneOutgoing, PhoneOff, PhoneMissed, Clock, RefreshCw, Mic } from 'lucide-vue-next'
 import DataTable, { type Column } from '@/components/shared/DataTable.vue'
+import SearchInput from '@/components/shared/SearchInput.vue'
 
 const { t } = useI18n()
 const store = useCallingStore()
 
 // Filters
+const phoneSearch = ref('')
 const statusFilter = ref('all')
 const accountFilter = ref('all')
 const directionFilter = ref('all')
 const ivrFlowFilter = ref('all')
 const currentPage = ref(1)
+let searchTimeout: number | null = null
 const pageSize = 20
 const accounts = ref<{ name: string }[]>([])
 const ivrFlows = ref<IVRFlow[]>([])
@@ -56,6 +59,7 @@ function fetchLogs() {
     account: accountFilter.value !== 'all' ? accountFilter.value : undefined,
     direction: directionFilter.value !== 'all' ? directionFilter.value : undefined,
     ivr_flow_id: ivrFlowFilter.value !== 'all' ? ivrFlowFilter.value : undefined,
+    phone: phoneSearch.value || undefined,
     page: currentPage.value,
     limit: pageSize
   })
@@ -148,6 +152,14 @@ watch([statusFilter, accountFilter, directionFilter, ivrFlowFilter], () => {
   currentPage.value = 1
   fetchLogs()
 })
+
+watch(phoneSearch, () => {
+  if (searchTimeout) clearTimeout(searchTimeout)
+  searchTimeout = window.setTimeout(() => {
+    currentPage.value = 1
+    fetchLogs()
+  }, 300)
+})
 </script>
 
 <template>
@@ -166,7 +178,8 @@ watch([statusFilter, accountFilter, directionFilter, ivrFlowFilter], () => {
     <!-- Filters -->
     <Card>
       <CardContent class="pt-6">
-        <div class="flex gap-4 flex-wrap">
+        <div class="flex gap-4 flex-wrap items-center">
+          <SearchInput v-model="phoneSearch" :placeholder="t('calling.searchByPhone')" class="w-48" />
           <Select v-model="statusFilter">
             <SelectTrigger class="w-48">
               <SelectValue :placeholder="t('calling.filterByStatus')" />
@@ -218,7 +231,7 @@ watch([statusFilter, accountFilter, directionFilter, ivrFlowFilter], () => {
 
     <!-- Table -->
     <Card>
-      <CardContent class="p-0">
+      <CardContent class="pt-6">
         <DataTable
           :items="store.callLogs"
           :columns="columns"

@@ -41,8 +41,26 @@ func (m *Manager) runIVRFlow(session *CallSession, waAccount *whatsapp.Account) 
 	// Set parent references for submenus
 	setMenuParents(&rootMenu, nil)
 
-	// Track path through IVR
+	// Track path through IVR — load existing steps so goto_flow accumulates
 	var ivrPath []map[string]string
+	var existingLog models.CallLog
+	if err := m.db.Select("ivr_path").Where("id = ?", session.CallLogID).First(&existingLog).Error; err == nil {
+		if existingLog.IVRPath != nil {
+			if steps, ok := existingLog.IVRPath["steps"].([]interface{}); ok {
+				for _, s := range steps {
+					if stepMap, ok := s.(map[string]interface{}); ok {
+						entry := map[string]string{}
+						for k, v := range stepMap {
+							if str, ok := v.(string); ok {
+								entry[k] = str
+							}
+						}
+						ivrPath = append(ivrPath, entry)
+					}
+				}
+			}
+		}
+	}
 
 	// Start at the root menu
 	currentMenu := &rootMenu

@@ -22,6 +22,7 @@ func (a *App) ListCallLogs(r *fastglue.Request) error {
 	contactIDStr := string(r.RequestCtx.QueryArgs().Peek("contact_id"))
 	direction := string(r.RequestCtx.QueryArgs().Peek("direction"))
 	ivrFlowID := string(r.RequestCtx.QueryArgs().Peek("ivr_flow_id"))
+	phone := string(r.RequestCtx.QueryArgs().Peek("phone"))
 
 	query := a.DB.Where("call_logs.organization_id = ?", orgID).
 		Preload("Contact").
@@ -55,6 +56,11 @@ func (a *App) ListCallLogs(r *fastglue.Request) error {
 	if ivrFlowID != "" {
 		query = query.Where("call_logs.ivr_flow_id = ?", ivrFlowID)
 		countQuery = countQuery.Where("ivr_flow_id = ?", ivrFlowID)
+	}
+	if phone != "" {
+		phoneLike := "%" + phone + "%"
+		query = query.Where("call_logs.caller_phone LIKE ?", phoneLike)
+		countQuery = countQuery.Where("caller_phone LIKE ?", phoneLike)
 	}
 
 	// Date range filter

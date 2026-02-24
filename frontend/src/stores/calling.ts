@@ -46,6 +46,7 @@ export const useCallingStore = defineStore('calling', () => {
     contact_id?: string
     direction?: string
     ivr_flow_id?: string
+    phone?: string
     from?: string
     to?: string
     page?: number

@@ -944,7 +944,7 @@ export const outgoingCallsService = {
 }
 
 export const callLogsService = {
-  list: (params?: { status?: string; account?: string; contact_id?: string; direction?: string; ivr_flow_id?: string; from?: string; to?: string; page?: number; limit?: number }) =>
+  list: (params?: { status?: string; account?: string; contact_id?: string; direction?: string; ivr_flow_id?: string; phone?: string; from?: string; to?: string; page?: number; limit?: number }) =>
     api.get<{ call_logs: CallLog[]; total: number }>('/call-logs', { params }),
   get: (id: string) => api.get<CallLog>(`/call-logs/${id}`),
   getRecordingURL: (id: string) =>

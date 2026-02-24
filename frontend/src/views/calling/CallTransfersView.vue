@@ -121,7 +121,7 @@ onMounted(() => {
 
       <TabsContent value="waiting" class="mt-4">
         <Card>
-          <CardContent class="p-0">
+          <CardContent class="pt-6">
             <DataTable
               :items="store.waitingTransfers"
               :columns="waitingColumns"
@@ -160,7 +160,7 @@ onMounted(() => {
 
       <TabsContent value="history" class="mt-4">
         <Card>
-          <CardContent class="p-0">
+          <CardContent class="pt-6">
             <DataTable
               :items="historyTransfers"
               :columns="historyColumns"

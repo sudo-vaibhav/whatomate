@@ -197,7 +197,7 @@ onMounted(async () => {
 
     <!-- Flows Table -->
     <Card>
-      <CardContent class="p-0">
+      <CardContent class="pt-6">
         <Table>
           <TableHeader>
             <TableRow>

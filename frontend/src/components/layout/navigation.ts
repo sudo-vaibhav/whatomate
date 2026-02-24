@@ -98,7 +98,7 @@ export const navigationItems: NavItem[] = [
   },
   {
     name: 'nav.calling',
-    path: '/calling/logs',
+    path: '/calling',
     icon: Phone,
     permission: 'call_logs',
     childPermissions: ['call_logs', 'ivr_flows', 'call_transfers'],

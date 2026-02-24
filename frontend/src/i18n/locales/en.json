@@ -2092,6 +2092,7 @@
     "error": "Error",
     "rootMenu": "Root Menu",
     "noCallLogs": "No call logs found.",
+    "searchByPhone": "Search phone number",
     "filterByStatus": "Filter by status",
     "filterByDirection": "Filter by direction",
     "filterByIVRFlow": "Filter by IVR flow",

@@ -219,6 +219,10 @@ const router = createRouter({
           meta: { permission: 'custom_actions' }
         },
         {
+          path: 'calling',
+          redirect: '/calling/logs'
+        },
+        {
           path: 'calling/logs',
           name: 'call-logs',
           component: () => import('@/views/calling/CallLogsView.vue'),
