@@ -32,14 +32,21 @@ type TTSConfig struct {
 	OpusencBinary string `koanf:"opusenc_binary"` // path to opusenc (defaults to "opusenc")
 }
 
+type ICEServerConfig struct {
+	URLs       []string `koanf:"urls"`
+	Username   string   `koanf:"username"`
+	Credential string   `koanf:"credential"`
+}
+
 type CallingConfig struct {
-	MaxCallDuration     int    `koanf:"max_call_duration"`
-	AudioDir            string `koanf:"audio_dir"`
-	HoldMusicFile       string `koanf:"hold_music_file"`
-	TransferTimeoutSecs int    `koanf:"transfer_timeout_secs"`
-	RingbackFile        string `koanf:"ringback_file"`
-	UDPPortMin          uint16 `koanf:"udp_port_min"` // WebRTC UDP port range start (default: 10000)
-	UDPPortMax          uint16 `koanf:"udp_port_max"` // WebRTC UDP port range end (default: 10100)
+	MaxCallDuration     int              `koanf:"max_call_duration"`
+	AudioDir            string           `koanf:"audio_dir"`
+	HoldMusicFile       string           `koanf:"hold_music_file"`
+	TransferTimeoutSecs int              `koanf:"transfer_timeout_secs"`
+	RingbackFile        string           `koanf:"ringback_file"`
+	UDPPortMin          uint16           `koanf:"udp_port_min"`  // WebRTC UDP port range start (default: 10000)
+	UDPPortMax          uint16           `koanf:"udp_port_max"`  // WebRTC UDP port range end (default: 10100)
+	ICEServers          []ICEServerConfig `koanf:"ice_servers"`
 }
 
 type AppConfig struct {

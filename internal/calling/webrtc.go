@@ -192,12 +192,19 @@ func (m *Manager) negotiateWebRTC(session *CallSession, account *models.WhatsApp
 
 // createPeerConnection creates a new WebRTC peer connection with Opus codec support
 func (m *Manager) createPeerConnection() (*webrtc.PeerConnection, error) {
+	iceServers := make([]webrtc.ICEServer, 0, len(m.config.ICEServers))
+	for _, s := range m.config.ICEServers {
+		ice := webrtc.ICEServer{URLs: s.URLs}
+		if s.Username != "" {
+			ice.Username = s.Username
+			ice.Credential = s.Credential
+			ice.CredentialType = webrtc.ICECredentialTypePassword
+		}
+		iceServers = append(iceServers, ice)
+	}
+
 	config := webrtc.Configuration{
-		ICEServers: []webrtc.ICEServer{
-			{
-				URLs: []string{"stun:stun.l.google.com:19302"},
-			},
-		},
+		ICEServers: iceServers,
 	}
 
 	mediaEngine := &webrtc.MediaEngine{}

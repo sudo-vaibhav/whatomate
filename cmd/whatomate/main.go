@@ -774,6 +774,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.POST("/api/calls/outgoing/{id}/hangup", app.HangupOutgoingCall)
 	g.POST("/api/calls/permission-request", app.SendCallPermissionRequest)
 	g.GET("/api/calls/permission/{contactId}", app.GetCallPermission)
+	g.GET("/api/calls/ice-servers", app.GetICEServers)
 
 	// Catalogs
 	g.GET("/api/catalogs", app.ListCatalogs)

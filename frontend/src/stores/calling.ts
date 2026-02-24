@@ -126,6 +126,25 @@ export const useCallingStore = defineStore('calling', () => {
     ivrFlows.value = ivrFlows.value.filter(f => f.id !== id)
   }
 
+  // ICE server config (fetched from backend)
+  let cachedICEServers: RTCIceServer[] | null = null
+
+  async function getICEServers(): Promise<RTCIceServer[]> {
+    if (cachedICEServers) return cachedICEServers
+    try {
+      const response = await outgoingCallsService.getICEServers()
+      const data = response.data as any
+      const servers = data.data?.ice_servers ?? data.ice_servers ?? []
+      cachedICEServers = servers.map((s: any) => ({
+        urls: s.urls,
+        ...(s.username && { username: s.username, credential: s.credential }),
+      }))
+    } catch {
+      cachedICEServers = []
+    }
+    return cachedICEServers!
+  }
+
   // Call Transfer actions
   async function fetchWaitingTransfers() {
     try {
@@ -148,10 +167,9 @@ export const useCallingStore = defineStore('calling', () => {
 
     localStream.value = stream
 
-    // Create RTCPeerConnection
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-    })
+    // Create RTCPeerConnection with configured ICE servers
+    const iceServers = await getICEServers()
+    const pc = new RTCPeerConnection({ iceServers })
     peerConnection.value = pc
 
     // Add local audio track
@@ -227,10 +245,9 @@ export const useCallingStore = defineStore('calling', () => {
 
     localStream.value = stream
 
-    // Create RTCPeerConnection
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-    })
+    // Create RTCPeerConnection with configured ICE servers
+    const iceServers = await getICEServers()
+    const pc = new RTCPeerConnection({ iceServers })
     peerConnection.value = pc
 
     // Add local audio track

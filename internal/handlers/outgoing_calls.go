@@ -183,6 +183,34 @@ func (a *App) SendCallPermissionRequest(r *fastglue.Request) error {
 	})
 }
 
+// GetICEServers handles GET /api/calls/ice-servers
+// Returns the configured ICE (STUN/TURN) servers for the frontend to use in WebRTC peer connections.
+func (a *App) GetICEServers(r *fastglue.Request) error {
+	_, _, err := a.getOrgAndUserID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	type iceServer struct {
+		URLs       []string `json:"urls"`
+		Username   string   `json:"username,omitempty"`
+		Credential string   `json:"credential,omitempty"`
+	}
+
+	servers := make([]iceServer, 0, len(a.Config.Calling.ICEServers))
+	for _, s := range a.Config.Calling.ICEServers {
+		servers = append(servers, iceServer{
+			URLs:       s.URLs,
+			Username:   s.Username,
+			Credential: s.Credential,
+		})
+	}
+
+	return r.SendEnvelope(map[string]any{
+		"ice_servers": servers,
+	})
+}
+
 // GetCallPermission handles GET /api/calls/permission/{contactId}?whatsapp_account=X
 // Checks call permission state directly via WhatsApp API.
 func (a *App) GetCallPermission(r *fastglue.Request) error {
