@@ -103,6 +103,14 @@ func (a *App) ConnectCallTransfer(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusConflict, "Transfer is no longer waiting", nil, "")
 	}
 
+	// Atomically claim the transfer in the DB so concurrent accepts are rejected
+	res := a.DB.Model(&models.CallTransfer{}).
+		Where("id = ? AND status = ?", transferID, models.CallTransferStatusWaiting).
+		Update("status", models.CallTransferStatusConnected)
+	if res.RowsAffected == 0 {
+		return r.SendErrorEnvelope(fasthttp.StatusConflict, "Transfer was already accepted by another agent", nil, "")
+	}
+
 	// If transfer has a team_id, check agent is a member (unless super admin)
 	if transfer.TeamID != nil && !a.IsSuperAdmin(userID) {
 		var memberCount int64
@@ -131,6 +139,10 @@ func (a *App) ConnectCallTransfer(r *fastglue.Request) error {
 
 	sdpAnswer, err := a.CallManager.ConnectAgentToTransfer(transferID, userID, req.SDPOffer)
 	if err != nil {
+		// Revert DB status so another agent can try
+		a.DB.Model(&models.CallTransfer{}).
+			Where("id = ? AND status = ?", transferID, models.CallTransferStatusConnected).
+			Update("status", models.CallTransferStatusWaiting)
 		a.Log.Error("Failed to connect agent to transfer", "error", err, "transfer_id", transferID)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to connect: "+err.Error(), nil, "")
 	}

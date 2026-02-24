@@ -195,14 +195,16 @@ export const useCallingStore = defineStore('calling', () => {
     const offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
 
-    // Wait for ICE gathering
+    // Wait for ICE gathering (with 3s timeout to avoid long TURN delays)
     await new Promise<void>((resolve) => {
       if (pc.iceGatheringState === 'complete') {
         resolve()
         return
       }
+      const timeout = setTimeout(resolve, 3000)
       pc.onicegatheringstatechange = () => {
         if (pc.iceGatheringState === 'complete') {
+          clearTimeout(timeout)
           resolve()
         }
       }
@@ -280,14 +282,16 @@ export const useCallingStore = defineStore('calling', () => {
     const offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
 
-    // Wait for ICE gathering
+    // Wait for ICE gathering (with 3s timeout to avoid long TURN delays)
     await new Promise<void>((resolve) => {
       if (pc.iceGatheringState === 'complete') {
         resolve()
         return
       }
+      const timeout = setTimeout(resolve, 3000)
       pc.onicegatheringstatechange = () => {
         if (pc.iceGatheringState === 'complete') {
+          clearTimeout(timeout)
           resolve()
         }
       }

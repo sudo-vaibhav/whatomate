@@ -115,6 +115,8 @@ func (m *Manager) ConnectAgentToTransfer(transferID, agentID uuid.UUID, sdpOffer
 		session.mu.Unlock()
 		return "", fmt.Errorf("transfer is not in waiting state: %s", session.TransferStatus)
 	}
+	// Claim the transfer atomically so a second agent gets rejected
+	session.TransferStatus = models.CallTransferStatusConnected
 	session.mu.Unlock()
 
 	// Create PeerConnection for agent (reuses same codec config)
@@ -188,7 +190,7 @@ func (m *Manager) ConnectAgentToTransfer(transferID, agentID uuid.UUID, sdpOffer
 	gatherComplete := webrtc.GatheringCompletePromise(agentPC)
 	select {
 	case <-gatherComplete:
-	case <-time.After(15 * time.Second):
+	case <-time.After(5 * time.Second):
 		agentPC.Close()
 		return "", fmt.Errorf("ICE gathering timed out for agent")
 	}
