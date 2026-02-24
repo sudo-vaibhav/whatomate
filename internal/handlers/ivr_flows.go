@@ -112,10 +112,18 @@ func (a *App) CreateIVRFlow(r *fastglue.Request) error {
 	}
 
 	// Generate TTS audio for greeting_text fields in the menu tree
-	if a.TTS != nil && req.Menu != nil {
-		if err := a.generateIVRAudio(req.Menu); err != nil {
-			a.Log.Error("TTS generation failed", "error", err)
-			// Non-fatal: save the flow anyway, audio can be regenerated
+	if req.Menu != nil {
+		if a.TTS == nil {
+			if menuHasGreetingText(req.Menu) {
+				return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
+					"Text-to-speech is not configured on this server. Please upload audio files instead.", nil, "")
+			}
+		} else {
+			if err := a.generateIVRAudio(req.Menu); err != nil {
+				a.Log.Error("TTS generation failed", "error", err)
+				return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
+					"Text-to-speech generation failed: "+err.Error(), nil, "")
+			}
 		}
 	}
 
@@ -173,19 +181,39 @@ func (a *App) UpdateIVRFlow(r *fastglue.Request) error {
 	}
 
 	// Generate TTS audio for greeting_text fields in the menu tree
-	if a.TTS != nil && req.Menu != nil {
-		if err := a.generateIVRAudio(req.Menu); err != nil {
-			a.Log.Error("TTS generation failed", "error", err)
+	if req.Menu != nil {
+		if a.TTS == nil {
+			if menuHasGreetingText(req.Menu) {
+				return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
+					"Text-to-speech is not configured on this server. Please upload audio files instead.", nil, "")
+			}
+		} else {
+			if err := a.generateIVRAudio(req.Menu); err != nil {
+				a.Log.Error("TTS generation failed", "error", err)
+				return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
+					"Text-to-speech generation failed: "+err.Error(), nil, "")
+			}
 		}
 	}
 
+	// Only update fields that were actually provided (non-zero) to support
+	// partial updates like toggling is_active without wiping the menu.
 	updates := map[string]any{
-		"name":              req.Name,
-		"description":       req.Description,
-		"is_active":         req.IsActive,
-		"is_call_start":     req.IsCallStart,
-		"menu":              req.Menu,
-		"welcome_audio_url": req.WelcomeAudioURL,
+		"is_active":    req.IsActive,
+		"is_call_start": req.IsCallStart,
+	}
+	if req.Name != "" {
+		updates["name"] = req.Name
+	}
+	if req.Description != "" || req.Name != "" {
+		// Include description when saving from the editor (name is always sent)
+		updates["description"] = req.Description
+	}
+	if req.Menu != nil {
+		updates["menu"] = req.Menu
+	}
+	if req.WelcomeAudioURL != "" {
+		updates["welcome_audio_url"] = req.WelcomeAudioURL
 	}
 	if req.WhatsAppAccount != "" {
 		updates["whatsapp_account"] = req.WhatsAppAccount
@@ -441,4 +469,27 @@ func walkMenuTTS(menu models.JSONB, generate func(string) (string, error)) error
 	}
 
 	return nil
+}
+
+// menuHasGreetingText recursively checks if any node in the menu tree uses greeting_text.
+func menuHasGreetingText(menu models.JSONB) bool {
+	if text, _ := menu["greeting_text"].(string); text != "" {
+		return true
+	}
+
+	opts, _ := menu["options"].(map[string]interface{})
+	for _, optRaw := range opts {
+		opt, ok := optRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		sub, ok := opt["menu"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if menuHasGreetingText(sub) {
+			return true
+		}
+	}
+	return false
 }

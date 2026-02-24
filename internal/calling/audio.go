@@ -11,9 +11,13 @@ import (
 )
 
 // AudioPlayer handles playing pre-recorded OGG/Opus audio into a WebRTC track.
+// It maintains cumulative RTP sequence numbers and timestamps across multiple
+// PlayFile calls so that receivers don't drop packets as duplicates.
 type AudioPlayer struct {
-	track *webrtc.TrackLocalStaticRTP
-	stop  chan struct{}
+	track          *webrtc.TrackLocalStaticRTP
+	stop           chan struct{}
+	sequenceNumber uint16
+	timestamp      uint32
 }
 
 // NewAudioPlayer creates a new audio player for a WebRTC track.
@@ -43,8 +47,6 @@ func (p *AudioPlayer) PlayFile(filePath string) (int, error) {
 	// Opus at 48kHz, 20ms frames = 960 samples per frame
 	const samplesPerFrame = 960
 
-	var sequenceNumber uint16
-	var timestamp uint32
 	packetCount := 0
 
 	ticker := time.NewTicker(20 * time.Millisecond)
@@ -59,8 +61,8 @@ func (p *AudioPlayer) PlayFile(filePath string) (int, error) {
 				Header: rtp.Header{
 					Version:        2,
 					PayloadType:    111, // Opus
-					SequenceNumber: sequenceNumber,
-					Timestamp:      timestamp,
+					SequenceNumber: p.sequenceNumber,
+					Timestamp:      p.timestamp,
 					SSRC:           1,
 				},
 				Payload: opusData,
@@ -70,8 +72,8 @@ func (p *AudioPlayer) PlayFile(filePath string) (int, error) {
 				return packetCount, fmt.Errorf("failed to write RTP packet: %w", err)
 			}
 
-			sequenceNumber++
-			timestamp += samplesPerFrame
+			p.sequenceNumber++
+			p.timestamp += samplesPerFrame
 			packetCount++
 		}
 	}
@@ -121,8 +123,6 @@ func (p *AudioPlayer) PlaySilence(duration time.Duration) {
 	silence := []byte{0xF8, 0xFF, 0xFE}
 
 	const samplesPerFrame = 960
-	var sequenceNumber uint16
-	var timestamp uint32
 
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
@@ -139,8 +139,8 @@ func (p *AudioPlayer) PlaySilence(duration time.Duration) {
 				Header: rtp.Header{
 					Version:        2,
 					PayloadType:    111,
-					SequenceNumber: sequenceNumber,
-					Timestamp:      timestamp,
+					SequenceNumber: p.sequenceNumber,
+					Timestamp:      p.timestamp,
 					SSRC:           1,
 				},
 				Payload: silence,
@@ -148,8 +148,8 @@ func (p *AudioPlayer) PlaySilence(duration time.Duration) {
 			if err := p.track.WriteRTP(packet); err != nil {
 				return
 			}
-			sequenceNumber++
-			timestamp += samplesPerFrame
+			p.sequenceNumber++
+			p.timestamp += samplesPerFrame
 		}
 	}
 }

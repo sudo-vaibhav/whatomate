@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Phone, PhoneIncoming, PhoneOutgoing, PhoneOff, PhoneMissed, Clock, RefreshCw, Mic } from 'lucide-vue-next'
 import DataTable, { type Column } from '@/components/shared/DataTable.vue'
 import SearchInput from '@/components/shared/SearchInput.vue'
+import IVRPathTree from '@/components/calling/IVRPathTree.vue'
 
 const { t } = useI18n()
 const store = useCallingStore()
@@ -337,17 +338,8 @@ watch(phoneSearch, () => {
           </div>
 
           <div v-if="selectedLog.ivr_path?.steps?.length">
-            <p class="text-sm text-muted-foreground mb-2">{{ t('calling.ivrPath') }}</p>
-            <div class="space-y-1">
-              <div
-                v-for="(step, idx) in selectedLog.ivr_path.steps"
-                :key="idx"
-                class="flex items-center gap-2 text-sm"
-              >
-                <Badge variant="outline" class="font-mono">{{ step.digit }}</Badge>
-                <span>{{ step.label || '-' }}</span>
-              </div>
-            </div>
+            <p class="text-sm text-muted-foreground mb-3">{{ t('calling.ivrPath') }}</p>
+            <IVRPathTree :steps="selectedLog.ivr_path.steps" />
           </div>
 
           <div v-if="selectedLog.recording_s3_key" class="space-y-2">

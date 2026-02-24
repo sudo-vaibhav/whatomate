@@ -31,6 +31,7 @@ type CallSession struct {
 	AudioTrack      *webrtc.TrackLocalStaticRTP
 	CurrentMenu     *IVRMenuNode
 	IVRFlow         *models.IVRFlow
+	IVRPlayer       *AudioPlayer // persists across goto_flow for RTP continuity
 	DTMFBuffer      chan byte
 	StartedAt       time.Time
 
@@ -251,6 +252,9 @@ func (m *Manager) cleanupSession(callID string) {
 	}
 	if session.HoldPlayer != nil {
 		session.HoldPlayer.Stop()
+	}
+	if session.IVRPlayer != nil {
+		session.IVRPlayer.Stop()
 	}
 	if session.TransferCancel != nil {
 		session.TransferCancel()

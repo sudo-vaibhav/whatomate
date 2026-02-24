@@ -62,13 +62,27 @@ func (m *Manager) runIVRFlow(session *CallSession, waAccount *whatsapp.Account) 
 		}
 	}
 
+	// Record which flow we're entering (first call gets flow_start,
+	// subsequent goto_flow calls already have a goto_flow marker)
+	if len(ivrPath) == 0 {
+		ivrPath = append(ivrPath, map[string]string{"action": "flow_start", "flow": session.IVRFlow.Name})
+	}
+
 	// Start at the root menu
 	currentMenu := &rootMenu
 	session.mu.Lock()
 	session.CurrentMenu = currentMenu
 	session.mu.Unlock()
 
-	player := NewAudioPlayer(session.AudioTrack)
+	// Reuse the session's IVR player to maintain RTP sequence continuity
+	// across goto_flow transitions (new player would reset seq to 0,
+	// causing the receiver to drop packets as duplicates).
+	session.mu.Lock()
+	if session.IVRPlayer == nil {
+		session.IVRPlayer = NewAudioPlayer(session.AudioTrack)
+	}
+	player := session.IVRPlayer
+	session.mu.Unlock()
 
 	for {
 		// Check if session is still active
@@ -113,14 +127,17 @@ func (m *Manager) runIVRFlow(session *CallSession, waAccount *whatsapp.Account) 
 			continue
 		}
 
-		ivrPath = append(ivrPath, map[string]string{"digit": digitStr, "label": option.Label})
-
 		m.log.Info("IVR option selected",
 			"call_id", session.ID,
 			"digit", digitStr,
 			"action", option.Action,
 			"label", option.Label,
 		)
+
+		// Record the digit step (goto_flow merges digit into its flow marker below)
+		if option.Action != "goto_flow" {
+			ivrPath = append(ivrPath, map[string]string{"digit": digitStr, "label": option.Label, "action": option.Action})
+		}
 
 		switch option.Action {
 		case "submenu":
@@ -152,7 +169,6 @@ func (m *Manager) runIVRFlow(session *CallSession, waAccount *whatsapp.Account) 
 		case "goto_flow":
 			if option.Target != "" {
 				m.log.Info("IVR goto_flow", "call_id", session.ID, "target_flow", option.Target)
-				m.saveIVRPath(session, ivrPath)
 
 				targetFlowID, err := uuid.Parse(option.Target)
 				if err != nil {
@@ -165,10 +181,15 @@ func (m *Manager) runIVRFlow(session *CallSession, waAccount *whatsapp.Account) 
 					m.log.Error("Failed to load goto_flow target", "error", err, "call_id", session.ID, "flow_id", option.Target)
 					continue
 				}
+
 				if !targetFlow.IsActive {
 					m.log.Warn("goto_flow target is disabled, skipping", "call_id", session.ID, "flow_id", option.Target)
 					continue
 				}
+
+				// Record the flow transition in the IVR path (include digit so the tree shows which key was pressed)
+				ivrPath = append(ivrPath, map[string]string{"action": "goto_flow", "flow": targetFlow.Name, "digit": digitStr, "label": option.Label})
+				m.saveIVRPath(session, ivrPath)
 
 				// Switch to the new flow and restart the IVR loop
 				session.mu.Lock()

@@ -154,15 +154,20 @@ func (a *App) processCallWebhook(phoneNumberID string, call interface{}) {
 
 	case "ended", "terminate":
 		// Calculate duration and determine final status.
-		// For incoming calls that were pre-accepted for WebRTC but never reached
-		// an agent (no transfer connected), mark as missed instead of completed.
+		// Re-read the call log to get the latest agent_id (may have been set
+		// by transfer acceptance after our initial read).
+		a.DB.First(callLog, callLog.ID)
+
 		duration := 0
 		if callLog.AnsweredAt != nil {
 			duration = int(now.Sub(*callLog.AnsweredAt).Seconds())
 		}
 
+		// For incoming calls that were pre-accepted for WebRTC but never reached
+		// an agent (no transfer connected), mark as missed instead of completed.
 		finalStatus := models.CallStatusCompleted
-		if callLog.Direction == models.CallDirectionIncoming && callLog.AgentID == nil {
+		if callLog.Direction == models.CallDirectionIncoming && callLog.AgentID == nil &&
+			callLog.Status != models.CallStatusTransferring {
 			finalStatus = models.CallStatusMissed
 		}
 

@@ -259,6 +259,12 @@ func (m *Manager) completeTransferConnection(session *CallSession, transferID, a
 			"connected_at": now,
 		})
 
+	// Also set agent_id on the CallLog so the webhook "ended" handler
+	// knows an agent was connected and doesn't mark the call as "missed".
+	m.db.Model(&models.CallLog{}).
+		Where("id = ?", session.CallLogID).
+		Update("agent_id", agentID)
+
 	session.mu.Lock()
 	session.TransferStatus = models.CallTransferStatusConnected
 	callerRemote := session.CallerRemoteTrack
