@@ -42,7 +42,7 @@ func (p *PiperTTS) Generate(text string) (string, error) {
 
 	// Step 1: Generate WAV using piper
 	wavPath := outPath + ".tmp.wav"
-	defer os.Remove(wavPath) // clean up temp WAV
+	defer func() { _ = os.Remove(wavPath) }() // clean up temp WAV
 
 	piperCmd := exec.CommandContext(ctx, p.BinaryPath,
 		"--model", p.ModelPath,
@@ -71,7 +71,7 @@ func (p *PiperTTS) Generate(text string) (string, error) {
 
 	// Write to a temp file first, then rename for atomicity
 	tmpOgg := outPath + ".tmp.ogg"
-	defer os.Remove(tmpOgg) // clean up on error
+	defer func() { _ = os.Remove(tmpOgg) }() // clean up on error
 
 	encCmd := exec.CommandContext(ctx, opusenc,
 		"--bitrate", "24",

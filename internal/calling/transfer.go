@@ -65,7 +65,9 @@ func (m *Manager) initiateTransfer(session *CallSession, waAccount string, teamT
 	session.HoldPlayer = player
 	session.mu.Unlock()
 
-	go player.PlayFileLoop(holdFile)
+	go func() {
+		_ = player.PlayFileLoop(holdFile)
+	}()
 
 	// Start timeout goroutine (use org-level override if set)
 	transferTimeout := m.getOrgTransferTimeout(session.OrganizationID)
@@ -132,12 +134,12 @@ func (m *Manager) ConnectAgentToTransfer(transferID, agentID uuid.UUID, sdpOffer
 		"caller-audio",
 	)
 	if err != nil {
-		agentPC.Close()
+		_ = agentPC.Close()
 		return "", fmt.Errorf("failed to create agent audio track: %w", err)
 	}
 
 	if _, err := agentPC.AddTrack(agentAudioTrack); err != nil {
-		agentPC.Close()
+		_ = agentPC.Close()
 		return "", fmt.Errorf("failed to add agent audio track: %w", err)
 	}
 
@@ -170,19 +172,19 @@ func (m *Manager) ConnectAgentToTransfer(transferID, agentID uuid.UUID, sdpOffer
 		SDP:  sdpOffer,
 	}
 	if err := agentPC.SetRemoteDescription(offer); err != nil {
-		agentPC.Close()
+		_ = agentPC.Close()
 		return "", fmt.Errorf("failed to set agent remote description: %w", err)
 	}
 
 	// Create answer
 	answer, err := agentPC.CreateAnswer(nil)
 	if err != nil {
-		agentPC.Close()
+		_ = agentPC.Close()
 		return "", fmt.Errorf("failed to create agent SDP answer: %w", err)
 	}
 
 	if err := agentPC.SetLocalDescription(answer); err != nil {
-		agentPC.Close()
+		_ = agentPC.Close()
 		return "", fmt.Errorf("failed to set agent local description: %w", err)
 	}
 
@@ -191,13 +193,13 @@ func (m *Manager) ConnectAgentToTransfer(transferID, agentID uuid.UUID, sdpOffer
 	select {
 	case <-gatherComplete:
 	case <-time.After(5 * time.Second):
-		agentPC.Close()
+		_ = agentPC.Close()
 		return "", fmt.Errorf("ICE gathering timed out for agent")
 	}
 
 	localDesc := agentPC.LocalDescription()
 	if localDesc == nil {
-		agentPC.Close()
+		_ = agentPC.Close()
 		return "", fmt.Errorf("no local description available for agent")
 	}
 
@@ -326,7 +328,7 @@ func (m *Manager) EndTransfer(transferID uuid.UUID) {
 
 	// Close agent PC
 	if session.AgentPC != nil {
-		session.AgentPC.Close()
+		_ = session.AgentPC.Close()
 	}
 
 	session.mu.Unlock()

@@ -52,7 +52,7 @@ func (m *Manager) handleDTMFTrack(session *CallSession, track *webrtc.TrackRemot
 		endBit := (buf[1] & 0x80) != 0
 
 		// Debounce: only emit on the first end-bit packet for each event
-		if endBit && !(lastEvent == eventID && lastEndBit) {
+		if endBit && (lastEvent != eventID || !lastEndBit) {
 			if digit, ok := dtmfDigits[eventID]; ok {
 				m.log.Info("DTMF digit detected",
 					"call_id", session.ID,

@@ -100,6 +100,11 @@ test.describe('Template Sending', () => {
       VALUES (gen_random_uuid(), '${orgId}', '${accountName}', '${buttonTemplateName}', 'E2E Buttons ${uid}', 'en', 'UTILITY', 'APPROVED', 'Would you like to proceed with your order?', '[{"type":"QUICK_REPLY","text":"Yes"},{"type":"QUICK_REPLY","text":"No"}]'::jsonb, NOW(), NOW())
       ON CONFLICT DO NOTHING`)
 
+    // Ensure the contact's whatsapp_account matches the template account
+    // so ChatView's selectedAccount aligns and the TemplatePicker doesn't
+    // filter templates out.
+    await execSQL(`UPDATE contacts SET whats_app_account = '${accountName}' WHERE id = '${contactId}'`)
+
     await reqContext.dispose()
   })
 
@@ -129,9 +134,7 @@ test.describe('Template Sending', () => {
     await chatPage.goto(contactId)
 
     await chatPage.openTemplatePicker()
-
-    // Wait for templates to load (loader disappears)
-    await page.waitForTimeout(1000)
+    await chatPage.waitForTemplatesLoaded()
 
     // At least our seeded templates should appear
     const templateItems = chatPage.templatePopover.locator('button.w-full.text-left')
@@ -145,11 +148,10 @@ test.describe('Template Sending', () => {
     await chatPage.goto(contactId)
 
     await chatPage.openTemplatePicker()
-    await page.waitForTimeout(500)
+    await chatPage.waitForTemplatesLoaded()
 
     // Search for our simple template
     await chatPage.searchTemplates('e2e_simple')
-    await page.waitForTimeout(300)
 
     // Should find the matching template
     const item = chatPage.getTemplateItem(`E2E Simple`)
@@ -162,11 +164,10 @@ test.describe('Template Sending', () => {
     await chatPage.goto(contactId)
 
     await chatPage.openTemplatePicker()
-    await page.waitForTimeout(500)
+    await chatPage.waitForTemplatesLoaded()
 
     // Search and select the simple template
     await chatPage.searchTemplates('e2e_simple')
-    await page.waitForTimeout(300)
     await chatPage.selectTemplate(`E2E Simple`)
 
     // Dialog should show "Preview" heading (no params to fill)
@@ -192,10 +193,9 @@ test.describe('Template Sending', () => {
     await chatPage.goto(contactId)
 
     await chatPage.openTemplatePicker()
-    await page.waitForTimeout(500)
+    await chatPage.waitForTemplatesLoaded()
 
     await chatPage.searchTemplates('e2e_params')
-    await page.waitForTimeout(300)
     await chatPage.selectTemplate(`E2E Params`)
 
     // Dialog should show "Fill Parameters" heading
@@ -218,10 +218,9 @@ test.describe('Template Sending', () => {
     await chatPage.goto(contactId)
 
     await chatPage.openTemplatePicker()
-    await page.waitForTimeout(500)
+    await chatPage.waitForTemplatesLoaded()
 
     await chatPage.searchTemplates('e2e_params')
-    await page.waitForTimeout(300)
     await chatPage.selectTemplate(`E2E Params`)
 
     // Fill parameters
@@ -242,10 +241,9 @@ test.describe('Template Sending', () => {
     await chatPage.goto(contactId)
 
     await chatPage.openTemplatePicker()
-    await page.waitForTimeout(500)
+    await chatPage.waitForTemplatesLoaded()
 
     await chatPage.searchTemplates('e2e_buttons')
-    await page.waitForTimeout(300)
     await chatPage.selectTemplate(`E2E Buttons`)
 
     // Preview should show the body
@@ -267,10 +265,9 @@ test.describe('Template Sending', () => {
     await chatPage.goto(contactId)
 
     await chatPage.openTemplatePicker()
-    await page.waitForTimeout(500)
+    await chatPage.waitForTemplatesLoaded()
 
     await chatPage.searchTemplates('e2e_simple')
-    await page.waitForTimeout(300)
     await chatPage.selectTemplate(`E2E Simple`)
 
     // Click send
@@ -297,10 +294,9 @@ test.describe('Template Sending', () => {
     await chatPage.goto(contactId)
 
     await chatPage.openTemplatePicker()
-    await page.waitForTimeout(500)
+    await chatPage.waitForTemplatesLoaded()
 
     await chatPage.searchTemplates('e2e_params')
-    await page.waitForTimeout(300)
     await chatPage.selectTemplate(`E2E Params`)
 
     // Fill only one parameter
@@ -326,10 +322,9 @@ test.describe('Template Sending', () => {
     await chatPage.goto(contactId)
 
     await chatPage.openTemplatePicker()
-    await page.waitForTimeout(500)
+    await chatPage.waitForTemplatesLoaded()
 
     await chatPage.searchTemplates('e2e_params')
-    await page.waitForTimeout(300)
     await chatPage.selectTemplate(`E2E Params`)
 
     // Fill all parameters
@@ -351,10 +346,9 @@ test.describe('Template Sending', () => {
     await chatPage.goto(contactId)
 
     await chatPage.openTemplatePicker()
-    await page.waitForTimeout(500)
+    await chatPage.waitForTemplatesLoaded()
 
     await chatPage.searchTemplates('e2e_simple')
-    await page.waitForTimeout(300)
     await chatPage.selectTemplate(`E2E Simple`)
 
     // Dialog should be open

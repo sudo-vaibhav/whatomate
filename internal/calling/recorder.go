@@ -63,8 +63,8 @@ func NewCallRecorder() (*CallRecorder, error) {
 
 	// Write OpusHead and OpusTags header pages
 	if err := r.writeHeaders(); err != nil {
-		f.Close()
-		os.Remove(f.Name())
+		_ = f.Close()
+		_ = os.Remove(f.Name())
 		return nil, err
 	}
 
@@ -107,7 +107,7 @@ func (r *CallRecorder) Stop() (string, int) {
 		r.flushPage(true)
 	}
 
-	r.file.Close()
+	_ = r.file.Close()
 	return r.path, r.packetCount
 }
 
@@ -201,7 +201,9 @@ func (r *CallRecorder) flushPage(lastPage bool) {
 	checksum := oggCRC32(page)
 	binary.LittleEndian.PutUint32(page[22:26], checksum)
 
-	r.file.Write(page)
+	if _, err := r.file.Write(page); err != nil {
+		return
+	}
 	r.pageSeqNo++
 
 	// Clear buffer

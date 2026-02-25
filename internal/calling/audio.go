@@ -37,7 +37,7 @@ func (p *AudioPlayer) PlayFile(filePath string) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to open audio file: %w", err)
 	}
-	defer file.Close()
+	defer file.Close() //nolint:errcheck
 
 	packets, err := readOpusPackets(file)
 	if err != nil {

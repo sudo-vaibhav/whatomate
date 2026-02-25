@@ -53,11 +53,11 @@ func (m *Manager) InitiateOutgoingCall(
 		"server-to-agent",
 	)
 	if err != nil {
-		agentPC.Close()
+		_ = agentPC.Close()
 		return uuid.Nil, "", fmt.Errorf("failed to create agent local track: %w", err)
 	}
 	if _, err := agentPC.AddTrack(agentLocalTrack); err != nil {
-		agentPC.Close()
+		_ = agentPC.Close()
 		return uuid.Nil, "", fmt.Errorf("failed to add agent local track: %w", err)
 	}
 
@@ -111,18 +111,18 @@ func (m *Manager) InitiateOutgoingCall(
 		Type: webrtc.SDPTypeOffer,
 		SDP:  agentSDPOffer,
 	}); err != nil {
-		agentPC.Close()
+		_ = agentPC.Close()
 		return uuid.Nil, "", fmt.Errorf("failed to set agent remote desc: %w", err)
 	}
 
 	// 6. Create SDP answer for agent
 	agentAnswer, err := agentPC.CreateAnswer(nil)
 	if err != nil {
-		agentPC.Close()
+		_ = agentPC.Close()
 		return uuid.Nil, "", fmt.Errorf("failed to create agent answer: %w", err)
 	}
 	if err := agentPC.SetLocalDescription(agentAnswer); err != nil {
-		agentPC.Close()
+		_ = agentPC.Close()
 		return uuid.Nil, "", fmt.Errorf("failed to set agent local desc: %w", err)
 	}
 
@@ -133,20 +133,20 @@ func (m *Manager) InitiateOutgoingCall(
 	select {
 	case <-gatherComplete:
 	case <-ctx.Done():
-		agentPC.Close()
+		_ = agentPC.Close()
 		return uuid.Nil, "", fmt.Errorf("agent ICE gathering timed out")
 	}
 
 	agentSDP := agentPC.LocalDescription()
 	if agentSDP == nil {
-		agentPC.Close()
+		_ = agentPC.Close()
 		return uuid.Nil, "", fmt.Errorf("no agent local description")
 	}
 
 	// 7. Create WhatsApp PeerConnection
 	waPC, err := m.createPeerConnection()
 	if err != nil {
-		agentPC.Close()
+		_ = agentPC.Close()
 		return uuid.Nil, "", fmt.Errorf("failed to create WA PC: %w", err)
 	}
 
@@ -157,13 +157,13 @@ func (m *Manager) InitiateOutgoingCall(
 		"server-to-wa",
 	)
 	if err != nil {
-		agentPC.Close()
-		waPC.Close()
+		_ = agentPC.Close()
+		_ = waPC.Close()
 		return uuid.Nil, "", fmt.Errorf("failed to create WA local track: %w", err)
 	}
 	if _, err := waPC.AddTrack(waLocalTrack); err != nil {
-		agentPC.Close()
-		waPC.Close()
+		_ = agentPC.Close()
+		_ = waPC.Close()
 		return uuid.Nil, "", fmt.Errorf("failed to add WA local track: %w", err)
 	}
 
@@ -202,13 +202,13 @@ func (m *Manager) InitiateOutgoingCall(
 	// 10. Create SDP offer for WhatsApp
 	waOffer, err := waPC.CreateOffer(nil)
 	if err != nil {
-		agentPC.Close()
-		waPC.Close()
+		_ = agentPC.Close()
+		_ = waPC.Close()
 		return uuid.Nil, "", fmt.Errorf("failed to create WA offer: %w", err)
 	}
 	if err := waPC.SetLocalDescription(waOffer); err != nil {
-		agentPC.Close()
-		waPC.Close()
+		_ = agentPC.Close()
+		_ = waPC.Close()
 		return uuid.Nil, "", fmt.Errorf("failed to set WA local desc: %w", err)
 	}
 
@@ -218,15 +218,15 @@ func (m *Manager) InitiateOutgoingCall(
 	select {
 	case <-waGatherComplete:
 	case <-ctx2.Done():
-		agentPC.Close()
-		waPC.Close()
+		_ = agentPC.Close()
+		_ = waPC.Close()
 		return uuid.Nil, "", fmt.Errorf("WA ICE gathering timed out")
 	}
 
 	waLocalDesc := waPC.LocalDescription()
 	if waLocalDesc == nil {
-		agentPC.Close()
-		waPC.Close()
+		_ = agentPC.Close()
+		_ = waPC.Close()
 		return uuid.Nil, "", fmt.Errorf("no WA local description")
 	}
 
@@ -236,8 +236,8 @@ func (m *Manager) InitiateOutgoingCall(
 
 	callID, err := m.whatsapp.InitiateCall(callCtx, waAccount, contactPhone, waLocalDesc.SDP)
 	if err != nil {
-		agentPC.Close()
-		waPC.Close()
+		_ = agentPC.Close()
+		_ = waPC.Close()
 		// Update call log as failed
 		m.db.Model(&callLog).Updates(map[string]any{
 			"status":        models.CallStatusFailed,

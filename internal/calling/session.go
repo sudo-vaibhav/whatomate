@@ -312,7 +312,7 @@ func (m *Manager) newRecorderIfEnabled() *CallRecorder {
 // finalizeRecording stops the recorder, uploads the OGG file to S3, and updates the CallLog.
 func (m *Manager) finalizeRecording(orgID, callLogID uuid.UUID, recorder *CallRecorder) {
 	path, packetCount := recorder.Stop()
-	defer os.Remove(path)
+	defer func() { _ = os.Remove(path) }()
 
 	if packetCount == 0 {
 		return
@@ -329,7 +329,7 @@ func (m *Manager) finalizeRecording(orgID, callLogID uuid.UUID, recorder *CallRe
 		m.log.Error("Failed to open recording file", "error", err, "call_log_id", callLogID)
 		return
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()

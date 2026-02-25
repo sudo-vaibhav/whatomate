@@ -251,15 +251,19 @@ func (m *Manager) createPeerConnection() (*webrtc.PeerConnection, error) {
 	if portMax == 0 {
 		portMax = 10100
 	}
-	settingEngine.SetEphemeralUDPPortRange(portMin, portMax)
+	if err := settingEngine.SetEphemeralUDPPortRange(portMin, portMax); err != nil {
+		return nil, fmt.Errorf("failed to set UDP port range: %w", err)
+	}
 
 	// On cloud/AWS, map private IP to public IP so ICE candidates
 	// advertise the reachable address instead of the internal one.
 	if m.config.PublicIP != "" {
-		settingEngine.SetICEAddressRewriteRules(webrtc.ICEAddressRewriteRule{
+		if err := settingEngine.SetICEAddressRewriteRules(webrtc.ICEAddressRewriteRule{
 			External:        []string{m.config.PublicIP},
 			AsCandidateType: webrtc.ICECandidateTypeHost,
-		})
+		}); err != nil {
+			return nil, fmt.Errorf("failed to set ICE address rewrite rules: %w", err)
+		}
 	}
 
 	api := webrtc.NewAPI(
@@ -333,7 +337,7 @@ func (m *Manager) consumeAudioWithDTMF(session *CallSession, track *webrtc.Track
 				eventID := pkt.Payload[0]
 				endBit := (pkt.Payload[1] & 0x80) != 0
 
-				if endBit && !(lastDTMFEvent == eventID && lastEndBit) {
+				if endBit && (lastDTMFEvent != eventID || !lastEndBit) {
 					if digit, ok := dtmfDigits[eventID]; ok {
 						m.log.Info("DTMF digit detected (inline)",
 							"call_id", session.ID,
