@@ -417,6 +417,106 @@ func (a *App) ServeIVRAudio(r *fastglue.Request) error {
 	return nil
 }
 
+// UploadOrgAudio handles multipart audio file uploads for org-level hold music and ringback tones.
+// The "type" query parameter must be "hold_music" or "ringback".
+func (a *App) UploadOrgAudio(r *fastglue.Request) error {
+	orgID, userID, err := a.getOrgAndUserID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+	if err := a.requirePermission(r, userID, models.ResourceOrganizations, models.ActionWrite); err != nil {
+		return nil
+	}
+
+	audioType := string(r.RequestCtx.QueryArgs().Peek("type"))
+	if audioType != "hold_music" && audioType != "ringback" {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Query parameter 'type' must be 'hold_music' or 'ringback'", nil, "")
+	}
+
+	// Parse multipart form
+	form, err := r.RequestCtx.MultipartForm()
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid multipart form: "+err.Error(), nil, "")
+	}
+
+	files := form.File["file"]
+	if len(files) == 0 {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "No file provided", nil, "")
+	}
+
+	fileHeader := files[0]
+	file, err := fileHeader.Open()
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Failed to open file", nil, "")
+	}
+	defer func() { _ = file.Close() }()
+
+	// Read file content (limit to 5MB)
+	const maxAudioSize = 5 << 20
+	data, err := io.ReadAll(io.LimitReader(file, maxAudioSize+1))
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to read file", nil, "")
+	}
+	if len(data) > maxAudioSize {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "File too large. Maximum size is 5MB", nil, "")
+	}
+
+	// Validate MIME type
+	mimeType := fileHeader.Header.Get("Content-Type")
+	allowedAudio := map[string]bool{
+		"audio/ogg": true, "audio/opus": true,
+		"audio/mpeg": true, "audio/mp3": true,
+		"audio/wav": true, "audio/x-wav": true, "audio/wave": true,
+		"application/ogg": true, "application/octet-stream": true,
+		"video/ogg": true,
+	}
+	if !allowedAudio[mimeType] {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Unsupported audio type: "+mimeType, nil, "")
+	}
+
+	ext := getExtensionFromMimeType(mimeType)
+	if ext == "" {
+		ext = ".ogg"
+	}
+
+	// Ensure audio directory exists
+	audioDir := a.getAudioDir()
+	if err := os.MkdirAll(audioDir, 0755); err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create audio directory", nil, "")
+	}
+
+	// Generate org-scoped filename
+	filename := fmt.Sprintf("org_%s_%s%s", orgID.String(), audioType, ext)
+	filePath := filepath.Join(audioDir, filename)
+
+	if err := os.WriteFile(filePath, data, 0644); err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to save audio file", nil, "")
+	}
+
+	// Update org settings with the new filename
+	var org models.Organization
+	if err := a.DB.Where("id = ?", orgID).First(&org).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to load organization", nil, "")
+	}
+	if org.Settings == nil {
+		org.Settings = models.JSONB{}
+	}
+	settingsKey := audioType + "_file"
+	org.Settings[settingsKey] = filename
+	if err := a.DB.Save(&org).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update organization settings", nil, "")
+	}
+
+	a.Log.Info("Org audio uploaded", "org_id", orgID, "type", audioType, "filename", filename, "size", len(data))
+
+	return r.SendEnvelope(map[string]any{
+		"filename":  filename,
+		"type":      audioType,
+		"mime_type": mimeType,
+		"size":      len(data),
+	})
+}
+
 // generateIVRAudio walks the IVR menu JSONB tree and generates TTS audio
 // for any node with a non-empty "greeting_text" field. The generated audio
 // filename is set as the node's "greeting" field.
