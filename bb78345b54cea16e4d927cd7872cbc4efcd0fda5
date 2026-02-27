@@ -1,0 +1,28 @@
+coolify/svgs/whatomate.svg
+  f34ec9cd8bd43282 1-5
+coolify/README.md
+  f34ec9cd8bd43282 1-50
+coolify/templates/compose/whatomate.yaml
+  f34ec9cd8bd43282 1-98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.5",
+  "base_commit_sha": "bb78345b54cea16e4d927cd7872cbc4efcd0fda5",
+  "prompts": {
+    "f34ec9cd8bd43282": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_361634c5effeggjvh0SJFOYtRD",
+        "model": "zai-coding-plan/glm-5"
+      },
+      "human_author": "sudo-vaibhav <53619134+sudo-vaibhav@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 173,
+      "total_deletions": 20,
+      "accepted_lines": 153,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/48ecdd9ad8847249febb17d3b38494a73594aab0fbbcc042cf9d0b4d4a59cc4f"
+    }
+  }
+}
