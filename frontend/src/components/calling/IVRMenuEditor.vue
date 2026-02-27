@@ -85,13 +85,10 @@ const actionOptions = [
 ]
 
 function onGreetingTabChange(tab: string | number) {
+  stopAudio()
   if (tab === 'text') {
-    // Switching to text mode: clear uploaded audio but keep any existing greeting_text
-    stopAudio()
-    emit('update:modelValue', { ...menu.value, greeting: '', greeting_text: menu.value.greeting_text || '' })
-  } else {
-    // Switching to audio mode: keep greeting_text so user can switch back and edit
-    stopAudio()
+    // Switching to text mode: preserve greeting (TTS audio) and ensure greeting_text exists
+    emit('update:modelValue', { ...menu.value, greeting_text: menu.value.greeting_text || '' })
   }
 }
 
