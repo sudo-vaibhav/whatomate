@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -474,23 +476,32 @@ func (a *App) UploadOrgAudio(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Unsupported audio type: "+mimeType, nil, "")
 	}
 
-	ext := getExtensionFromMimeType(mimeType)
-	if ext == "" {
-		ext = ".ogg"
-	}
-
 	// Ensure audio directory exists
 	audioDir := a.getAudioDir()
 	if err := os.MkdirAll(audioDir, 0755); err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create audio directory", nil, "")
 	}
 
-	// Generate org-scoped filename
-	filename := fmt.Sprintf("org_%s_%s%s", orgID.String(), audioType, ext)
+	// Save uploaded file to a temp location for transcoding
+	tmpInput, err := os.CreateTemp("", "org-audio-input-*")
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create temp file", nil, "")
+	}
+	defer os.Remove(tmpInput.Name())
+
+	if _, err := tmpInput.Write(data); err != nil {
+		tmpInput.Close()
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to write temp file", nil, "")
+	}
+	tmpInput.Close()
+
+	// Transcode to OGG/Opus 48kHz mono using ffmpeg
+	filename := fmt.Sprintf("org_%s_%s.ogg", orgID.String(), audioType)
 	filePath := filepath.Join(audioDir, filename)
 
-	if err := os.WriteFile(filePath, data, 0644); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to save audio file", nil, "")
+	if err := transcodeToOpus(tmpInput.Name(), filePath); err != nil {
+		a.Log.Error("Audio transcoding failed", "error", err, "org_id", orgID, "type", audioType)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to transcode audio to Opus format", nil, "")
 	}
 
 	// Update org settings with the new filename
@@ -515,6 +526,31 @@ func (a *App) UploadOrgAudio(r *fastglue.Request) error {
 		"mime_type": mimeType,
 		"size":      len(data),
 	})
+}
+
+// transcodeToOpus converts any audio file to OGG/Opus 48kHz mono using ffmpeg.
+// This ensures the file is compatible with the WebRTC AudioPlayer.
+func transcodeToOpus(inputPath, outputPath string) error {
+	cmd := exec.Command("ffmpeg",
+		"-y",            // overwrite output
+		"-i", inputPath, // input file
+		"-ac", "1",      // mono
+		"-ar", "48000",  // 48kHz (Opus standard)
+		"-c:a", "libopus",
+		"-b:a", "48k", // bitrate
+		"-application", "audio",
+		"-frame_duration", "20", // 20ms frames (matches RTP packetization)
+		"-vn",        // strip video/cover art
+		outputPath,
+	)
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("ffmpeg failed: %w (stderr: %s)", err, stderr.String())
+	}
+	return nil
 }
 
 // generateIVRAudio walks the IVR menu JSONB tree and generates TTS audio
