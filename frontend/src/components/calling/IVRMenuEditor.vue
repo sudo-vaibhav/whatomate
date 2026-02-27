@@ -43,8 +43,9 @@ const menu = computed({
 })
 
 // Greeting mode: 'audio' for uploaded files, 'text' for TTS
+// If greeting_text exists (even alongside a generated audio file), default to text tab
 const greetingTab = computed(() =>
-  menu.value.greeting_text ? 'text' : 'audio'
+  menu.value.greeting_text !== undefined && menu.value.greeting_text !== '' ? 'text' : 'audio'
 )
 
 const optionEntries = computed(() => {
@@ -85,17 +86,17 @@ const actionOptions = [
 
 function onGreetingTabChange(tab: string | number) {
   if (tab === 'text') {
-    // Switching to text mode: clear uploaded audio
+    // Switching to text mode: clear uploaded audio but keep any existing greeting_text
     stopAudio()
     emit('update:modelValue', { ...menu.value, greeting: '', greeting_text: menu.value.greeting_text || '' })
   } else {
-    // Switching to audio mode: clear greeting text
-    emit('update:modelValue', { ...menu.value, greeting_text: undefined })
+    // Switching to audio mode: keep greeting_text so user can switch back and edit
+    stopAudio()
   }
 }
 
 function updateGreetingText(text: string) {
-  emit('update:modelValue', { ...menu.value, greeting_text: text, greeting: '' })
+  emit('update:modelValue', { ...menu.value, greeting_text: text })
 }
 
 function triggerFileUpload() {
