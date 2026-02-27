@@ -1,0 +1,98 @@
+# documentation: https://shridarpatil.github.io/whatomate/
+# slogan: Modern, open-source WhatsApp Business Platform with multi-tenant support, real-time chat, campaigns, and AI-powered chatbots.
+# category: communication
+# tags: whatsapp,business-api,messaging,chatbot,multi-tenant,campaigns
+# logo: svgs/whatomate.svg
+# port: 8080
+
+services:
+  whatomate:
+    image: shridh0r/whatomate:latest
+    volumes:
+      - whatomate-uploads:/app/uploads
+      - whatomate-audio:/app/audio
+      - type: bind
+        source: ./config.toml
+        target: /app/config.toml
+        content: |
+          [app]
+          environment = "production"
+          encryption_key = "$SERVICE_BASE64_64_ENCRYPTION"
+
+          [server]
+          host = "0.0.0.0"
+          port = 8080
+
+          [database]
+          host = "db"
+          port = 5432
+          user = "$SERVICE_USER_POSTGRES"
+          password = "$SERVICE_PASSWORD_POSTGRES"
+          name = "${POSTGRES_DB:-whatomate}"
+          ssl_mode = "disable"
+
+          [redis]
+          host = "redis"
+          port = 6379
+
+          [jwt]
+          secret = "$SERVICE_BASE64_64_JWT"
+
+          [storage]
+          type = "local"
+          local_path = "/app/uploads"
+
+          [default_admin]
+          email = "${ADMIN_EMAIL:-admin@example.com}"
+          password = "${ADMIN_PASSWORD:?}"
+          full_name = "${ADMIN_NAME:-Admin}"
+
+          [rate_limit]
+          enabled = true
+          trust_proxy = true
+
+          [cookie]
+          secure = true
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["server", "-migrate", "-config", "/app/config.toml"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  db:
+    image: postgres:17-alpine
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=$SERVICE_USER_POSTGRES
+      - POSTGRES_PASSWORD=$SERVICE_PASSWORD_POSTGRES
+      - POSTGRES_DB=${POSTGRES_DB:-whatomate}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  whatomate-uploads:
+  whatomate-audio:
+  postgres-data:
+  redis-data:
